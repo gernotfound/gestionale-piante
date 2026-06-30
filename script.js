@@ -388,8 +388,7 @@ function showMapPlantsList(plantsList) {
     container.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
-
-// --- SCANNER ---
+// --- SCANNER E GRAFICI GLOBALI ---
 function openLabelsView() { document.getElementById('dashboard').classList.add('hidden'); document.getElementById('labels-scanner-view').classList.remove('hidden'); }
 function closeLabelsView() { if(html5QrcodeScanner) { html5QrcodeScanner.clear().catch(e => console.error(e)); html5QrcodeScanner = null; } document.getElementById('reader-container').style.display = 'none'; document.getElementById('labels-scanner-view').classList.add('hidden'); document.getElementById('dashboard').classList.remove('hidden'); }
 function startScanner() { if(html5QrcodeScanner) return; document.getElementById('reader-container').style.display = 'block'; html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false); html5QrcodeScanner.render(onScanSuccess, onScanFailure); }
