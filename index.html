@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Il mio giardino tropicale - Pro</title>
+    <title>Gestione piante</title>
     
     <!-- Libreria per la Mappa (Leaflet) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
@@ -28,49 +28,59 @@
 <div id="autosave-toast" class="hidden">💾 Salvataggio automatico...</div>
 
 <div class="container">
-    <header>
-        <h1>
-            <span id="main-title">🌿 Gestione Piante Tropicali - Pro</span>
-            <button class="edit-title-btn" onclick="editMainTitle()" title="Modifica il nome del giardino">✏️</button>
-        </h1>
-    </header>
-
-    <!-- Avvio -->
+    
+    <!-- Schermata di Avvio -->
     <div id="startup-screen">
+        <h1 class="startup-title">🌿 Gestione piante</h1>
         <h2>Benvenuto nel tuo giardino virtuale</h2>
-        <button class="btn" onclick="createNewGarden()">🌱 Crea nuovo profilo vuoto</button>
-        <div style="margin-top: 20px; text-align: center;">
-            <p>Oppure ripristina un vecchio salvataggio ZIP:</p>
+        <button class="btn btn-add-main" style="margin-top: 20px;" onclick="createNewGarden()">🌱 Crea nuovo giardino</button>
+        <div style="margin-top: 30px; text-align: center; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+            <p style="margin-top: 0; color: var(--grey); font-weight: bold;">Oppure ripristina un vecchio salvataggio ZIP:</p>
             <input type="file" accept=".zip" onchange="loadProfile(event)">
         </div>
     </div>
 
-    <!-- Dashboard Main -->
+    <!-- Dashboard Principale -->
     <div id="dashboard" class="hidden">
         
-        <!-- PLANCIA DI COMANDO UNIFICATA (Migliorata) -->
-        <div class="dashboard-panel" id="dashboard-controls" style="padding: 20px; margin-bottom: 20px;">
+        <!-- NUOVA PLANCIA DI COMANDO (UI Design) -->
+        <div class="dashboard-panel" id="dashboard-controls" style="padding: 20px 25px; margin-bottom: 20px;">
             
-            <!-- Riga 1: Bottoni Azione -->
-            <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; border-bottom: 2px solid #eee; padding-bottom: 15px;">
-                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                    <button class="btn" onclick="openPlantForm()">➕ Aggiungi pianta</button>
-                    <button id="btn-batch-mode" class="btn btn-warning" onclick="toggleBatchMode()">☑️ Macro</button>
-                    <button class="btn btn-purple" onclick="toggleGlobalStats()">📊 Eventi</button>
-                    <button class="btn btn-blue" onclick="openGlobalMapView()">🗺️ Mappa</button>
-                </div>
-                <div style="display: flex; gap: 5px; flex-wrap: wrap;">
-                    <button class="btn btn-grey" onclick="openMyDataView()">📂 I miei dati</button>
-                    <button class="btn" style="background-color:#555;" onclick="openLabelsView()">🏷️ Etichette</button>
-                    <button id="btn-export" class="btn btn-danger" onclick="exportData()">💾 Backup</button>
-                    <button class="btn" style="background-color:#333;" onclick="logout()">🚪 Esci</button>
+            <!-- Riga 1: Titolo Giardino + Azioni di Sistema -->
+            <div class="dashboard-topbar">
+                <h1 class="garden-title">
+                    <span id="main-title">🌿 Il mio giardino</span>
+                    <button class="edit-title-btn" onclick="editMainTitle()" title="Modifica il nome del giardino">✏️</button>
+                </h1>
+                <div class="sys-buttons">
+                    <button id="btn-export" class="btn-text btn-text-danger" onclick="exportData()">💾 Backup</button>
+                    <button class="btn-text" onclick="logout()">🚪 Esci</button>
                 </div>
             </div>
 
-            <!-- Riga 2: Barra di Ricerca e Ordinamento (OTTIMIZZATA) -->
-            <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: nowrap; align-items: center;">
-                <input type="text" id="search-plant" placeholder="🔍 Cerca pianta per nome o specie..." onkeyup="renderPlants()" style="flex: 1; min-width: 100px; border-radius: 20px; padding: 10px 15px; border: 1px solid var(--secondary); outline: none; font-size: 15px;">
-                <select id="sort-plants" onchange="renderPlants()" style="width: max-content; flex-shrink: 0; border-radius: 20px; padding: 10px 15px; border: 1px solid var(--secondary); outline: none; font-size: 14px; background: white; cursor: pointer;">
+            <!-- Divisore leggero -->
+            <hr class="ui-divider">
+
+            <!-- Riga 2: Azione Principale + Toolbar Strumenti -->
+            <div class="dashboard-actions">
+                <button class="btn-add-main" onclick="openPlantForm()">➕ Aggiungi pianta</button>
+                
+                <div class="app-toolbar">
+                    <button onclick="toggleGlobalStats()" title="Visualizza le statistiche degli eventi">📊 Eventi</button>
+                    <button onclick="openGlobalMapView()" title="Vedi tutte le piante sulla mappa">🗺️ Mappa</button>
+                    <button onclick="openMyDataView()" title="Fornitori, substrati e note generali">📂 Dati</button>
+                    <button onclick="openLabelsView()" title="Scansiona un QR code">🏷️ Scanner</button>
+                    <button id="btn-batch-mode" class="macro-btn" onclick="toggleBatchMode()" title="Applica eventi a più piante contemporaneamente">☑️ Macro</button>
+                </div>
+            </div>
+
+            <!-- Riga 3: Barra di Ricerca e Ordinamento -->
+            <div class="search-sort-bar">
+                <div class="search-input-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="search-plant" placeholder="Cerca pianta per nome o specie..." onkeyup="renderPlants()">
+                </div>
+                <select id="sort-plants" onchange="renderPlants()" class="sort-select">
                     <option value="name">🔤 Nome (A-Z)</option>
                     <option value="newest">🆕 Aggiunte di recente</option>
                     <option value="oldest">🕰️ Meno recenti</option>
@@ -78,7 +88,7 @@
                 </select>
             </div>
 
-            <!-- Riga 3: Filtri Rapidi -->
+            <!-- Riga 4: Filtri Rapidi -->
             <div class="filters-container" id="quick-filters" style="margin-bottom: 0;">
                 <button class="filter-chip active" onclick="setQuickFilter('all', this)">Tutte le piante</button>
                 <button class="filter-chip" onclick="setQuickFilter('vaso', this)">🪴 In vaso</button>
@@ -111,7 +121,6 @@
             <h2 id="form-title" style="margin-top:0; color:var(--primary); padding-bottom:5px;">Aggiungi nuova pianta</h2>
             
             <div class="form-grid">
-                
                 <!-- SEZIONE 1: Dati principali -->
                 <h3 class="form-section-title">📋 Dati principali</h3>
                 <div><label>Nome*:</label><input type="text" id="p-name" placeholder="es. Yellow pitahaya 1"></div>
