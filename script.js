@@ -159,7 +159,6 @@ function editMainTitle() {
 function startAppUI() {
     document.getElementById('dashboard').classList.remove('hidden'); 
     document.getElementById('dashboard-controls').classList.remove('hidden'); 
-    document.getElementById('quick-filters').classList.remove('hidden'); 
     document.getElementById('dashboard-stats').classList.remove('hidden'); 
     document.getElementById('plants-grid').classList.remove('hidden');
     renderPlants();
@@ -591,7 +590,7 @@ function removePhoto(type) {
 
 function openPlantForm() {
     editingMode = false; currentPlantId = null; document.getElementById('form-title').innerText = "Aggiungi nuova pianta";
-    document.getElementById('main-controls').classList.add('hidden'); document.getElementById('dashboard-controls').classList.add('hidden'); document.getElementById('quick-filters').classList.add('hidden'); document.getElementById('global-stats-view').classList.add('hidden'); document.getElementById('global-map-page').classList.add('hidden'); document.getElementById('dashboard-stats').classList.add('hidden'); document.getElementById('plants-grid').classList.add('hidden'); document.getElementById('my-data-page').classList.add('hidden'); document.getElementById('archive-page').classList.add('hidden'); document.getElementById('form-container').classList.remove('hidden');
+    document.getElementById('dashboard-controls').classList.add('hidden'); document.getElementById('global-stats-view').classList.add('hidden'); document.getElementById('global-map-page').classList.add('hidden'); document.getElementById('dashboard-stats').classList.add('hidden'); document.getElementById('plants-grid').classList.add('hidden'); document.getElementById('my-data-page').classList.add('hidden'); document.getElementById('archive-page').classList.add('hidden'); document.getElementById('form-container').classList.remove('hidden');
     document.getElementById('form-placement-section').style.display = 'block';
     if (isBatchMode) toggleBatchMode(); 
     
@@ -634,7 +633,7 @@ function closePlantForm() {
     if (currentPlantId) { 
         openPlantDetail(currentPlantId);
     } else { 
-        document.getElementById('main-controls').classList.remove('hidden'); document.getElementById('dashboard-controls').classList.remove('hidden'); document.getElementById('quick-filters').classList.remove('hidden'); document.getElementById('dashboard-stats').classList.remove('hidden'); document.getElementById('plants-grid').classList.remove('hidden'); renderPlants(); 
+        document.getElementById('dashboard-controls').classList.remove('hidden'); document.getElementById('dashboard-stats').classList.remove('hidden'); document.getElementById('plants-grid').classList.remove('hidden'); renderPlants(); 
     }
 }
 
@@ -842,7 +841,7 @@ function closePlantDetail() {
     document.getElementById('plant-detail-view').classList.add('hidden');
     const plant = plantsDatabase.find(p => p.id === currentPlantId);
     if (plant && plant.status === 'archived') { openArchiveView(); } 
-    else { document.getElementById('dashboard').classList.remove('hidden'); document.getElementById('main-controls').classList.remove('hidden'); document.getElementById('dashboard-controls').classList.remove('hidden'); document.getElementById('quick-filters').classList.remove('hidden'); document.getElementById('dashboard-stats').classList.remove('hidden'); document.getElementById('plants-grid').classList.remove('hidden'); renderPlants(); }
+    else { document.getElementById('dashboard').classList.remove('hidden'); document.getElementById('dashboard-controls').classList.remove('hidden'); document.getElementById('dashboard-stats').classList.remove('hidden'); document.getElementById('plants-grid').classList.remove('hidden'); renderPlants(); }
 }
 
 function editCurrentPlant() {
@@ -860,7 +859,7 @@ function editCurrentPlant() {
     if(plant.soil) { setSoilMode('select'); document.getElementById('p-soil-select').value = plant.soil; document.getElementById('p-soil-input').value = plant.soil; } else { setSoilMode('select'); }
     document.getElementById('p-location').value = plant.location || ''; document.getElementById('p-notes').value = plant.notes || ''; document.getElementById('p-lat').value = plant.lat || ''; document.getElementById('p-lng').value = plant.lng || '';
     
-    document.getElementById('plant-detail-view').classList.add('hidden'); document.getElementById('dashboard').classList.remove('hidden'); document.getElementById('main-controls').classList.add('hidden'); document.getElementById('dashboard-controls').classList.add('hidden'); document.getElementById('quick-filters').classList.add('hidden'); document.getElementById('dashboard-stats').classList.add('hidden'); document.getElementById('global-stats-view').classList.add('hidden'); document.getElementById('global-map-page').classList.add('hidden'); document.getElementById('plants-grid').classList.add('hidden'); document.getElementById('form-title').innerText = "Modifica dettagli pianta"; document.getElementById('form-container').classList.remove('hidden');
+    document.getElementById('plant-detail-view').classList.add('hidden'); document.getElementById('dashboard').classList.remove('hidden'); document.getElementById('dashboard-controls').classList.add('hidden'); document.getElementById('dashboard-stats').classList.add('hidden'); document.getElementById('global-stats-view').classList.add('hidden'); document.getElementById('global-map-page').classList.add('hidden'); document.getElementById('plants-grid').classList.add('hidden'); document.getElementById('form-title').innerText = "Modifica dettagli pianta"; document.getElementById('form-container').classList.remove('hidden');
 }
 
 function toggleLogPotSize() {
