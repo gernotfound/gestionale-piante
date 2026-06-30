@@ -51,7 +51,7 @@
         <!-- PLANCIA DI COMANDO UNIFICATA (Migliorata) -->
         <div class="dashboard-panel" id="dashboard-controls" style="padding: 20px; margin-bottom: 20px;">
             
-            <!-- Riga 1: Bottoni Azione (Divisi tra primari e di sistema) -->
+            <!-- Riga 1: Bottoni Azione -->
             <div style="display: flex; justify-content: space-between; flex-wrap: wrap; gap: 10px; margin-bottom: 15px; border-bottom: 2px solid #eee; padding-bottom: 15px;">
                 <div style="display: flex; gap: 5px; flex-wrap: wrap;">
                     <button class="btn" onclick="openPlantForm()">➕ Aggiungi pianta</button>
@@ -67,10 +67,10 @@
                 </div>
             </div>
 
-            <!-- Riga 2: Barra di Ricerca e Ordinamento -->
-            <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: wrap;">
-                <input type="text" id="search-plant" placeholder="🔍 Cerca pianta per nome o specie..." onkeyup="renderPlants()" style="flex: 1; min-width: 250px; border-radius: 20px; padding: 10px 15px; border: 1px solid var(--secondary); outline: none; font-size: 15px;">
-                <select id="sort-plants" onchange="renderPlants()" style="border-radius: 20px; padding: 10px 15px; border: 1px solid var(--secondary); outline: none; font-size: 14px; background: white; cursor: pointer;">
+            <!-- Riga 2: Barra di Ricerca e Ordinamento (OTTIMIZZATA) -->
+            <div style="display: flex; gap: 10px; margin-bottom: 15px; flex-wrap: nowrap; align-items: center;">
+                <input type="text" id="search-plant" placeholder="🔍 Cerca pianta per nome o specie..." onkeyup="renderPlants()" style="flex: 1; min-width: 100px; border-radius: 20px; padding: 10px 15px; border: 1px solid var(--secondary); outline: none; font-size: 15px;">
+                <select id="sort-plants" onchange="renderPlants()" style="width: max-content; flex-shrink: 0; border-radius: 20px; padding: 10px 15px; border: 1px solid var(--secondary); outline: none; font-size: 14px; background: white; cursor: pointer;">
                     <option value="name">🔤 Nome (A-Z)</option>
                     <option value="newest">🆕 Aggiunte di recente</option>
                     <option value="oldest">🕰️ Meno recenti</option>
