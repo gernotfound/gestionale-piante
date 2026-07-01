@@ -1,22 +1,581 @@
-<!-- Registrazione Service Worker per PWA -->
+<!DOCTYPE html>
+<html lang="it">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>Gestione piante</title>
+    
+    <!-- 🥑 Icona Avocado per la scheda del browser e i preferiti -->
+    <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🥑</text></svg>">
+    <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🥑</text></svg>">
+    
+    <!-- Configurazione per Mobile -->
+    <meta name="theme-color" content="#2e7d32">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <!-- Temporaneamente rimosso il manifest finché non testiamo che tutto funzioni -->
+
+    <!-- Libreria per la Mappa (Leaflet) -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
+    <script src="https://unpkg.com/leaflet/dist/leaflet.js"></script>
+    
+    <!-- Libreria per i Grafici (Chart.js) -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Librerie per Generare e Leggere QR Code offline -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <script src="https://unpkg.com/html5-qrcode" type="text/javascript"></script>
+
+    <!-- Libreria JSZip per creare e leggere file ZIP -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
+
+    <!-- I nostri file separati -->
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<!-- Popup Salvataggio Automatico -->
+<div id="autosave-toast" class="hidden">💾</div>
+
+<div class="container">
+    
+    <!-- Schermata di Avvio -->
+    <div id="startup-screen">
+        <h1 class="startup-title">
+            <span class="startup-icon">🌿</span>Gestione piante
+        </h1>
+        <h2>Benvenuto nel tuo giardino virtuale</h2>
+        <button class="btn btn-add-main" style="margin-top: 20px;" onclick="createNewGarden()">🌱 Crea nuovo giardino</button>
+        <div style="margin-top: 30px; text-align: center; background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 10px rgba(0,0,0,0.05);">
+            <p style="margin-top: 0; color: var(--grey); font-weight: bold;">Oppure ripristina un vecchio salvataggio ZIP:</p>
+            <input type="file" accept=".zip" onchange="loadProfile(event)">
+        </div>
+    </div>
+
+    <!-- Dashboard Principale -->
+    <div id="dashboard" class="hidden">
+        
+        <!-- PLANCIA DI COMANDO UNIFICATA -->
+        <div class="dashboard-panel" id="dashboard-controls" style="padding: 20px 25px; margin-bottom: 20px;">
+            
+            <!-- Riga 1: Titolo Giardino + Azioni di Sistema -->
+            <div class="dashboard-topbar">
+                <h1 class="garden-title">
+                    <span id="main-title">🌿 Il mio giardino</span>
+                    <button class="edit-title-btn" onclick="editMainTitle()" title="Modifica il nome del giardino">✏️</button>
+                </h1>
+                <div class="sys-buttons">
+                    <button id="btn-export" class="btn-text btn-text-danger" onclick="exportData()">💾 Backup</button>
+                    <button class="btn-text" onclick="logout()">🚪 Esci</button>
+                </div>
+            </div>
+
+            <!-- Divisore leggero -->
+            <hr class="ui-divider">
+
+            <!-- Riga 2: Azione Principale + Toolbar Strumenti -->
+            <div class="dashboard-actions">
+                <button class="btn-add-main" onclick="openPlantForm()">➕ Aggiungi pianta</button>
+                
+                <div class="app-toolbar">
+                    <button onclick="toggleGlobalStats()" title="Visualizza le statistiche degli eventi">📊 Eventi</button>
+                    <button onclick="openGlobalMapView()" title="Vedi tutte le piante sulla mappa">🗺️ Mappa</button>
+                    <button onclick="openMyDataView()" title="Fornitori, substrati e note generali">📂 Dati</button>
+                    <button onclick="openLabelsView()" title="Scansiona un QR code">🏷️ Scanner</button>
+                    <button id="btn-batch-mode" class="macro-btn" onclick="toggleBatchMode()" title="Applica eventi a più piante contemporaneamente">☑️ Macro</button>
+                </div>
+            </div>
+
+            <!-- Riga 3: Barra di Ricerca e Ordinamento -->
+            <div class="search-sort-bar">
+                <div class="search-input-wrapper">
+                    <span class="search-icon">🔍</span>
+                    <input type="text" id="search-plant" placeholder="Cerca pianta per nome o specie..." onkeyup="renderPlants()">
+                </div>
+                <select id="sort-plants" onchange="renderPlants()" class="sort-select">
+                    <option value="name">🔤 Nome (A-Z)</option>
+                    <option value="newest">🆕 Aggiunte di recente</option>
+                    <option value="oldest">🕰️ Meno recenti</option>
+                    <option value="last_updated">🔄 Ultimi eventi</option>
+                    <option value="temp_desc">🌡️ Temp. minima (decrescente)</option>
+                    <option value="ph_desc">🧪 pH (decrescente)</option>
+                </select>
+            </div>
+
+            <!-- Riga 4: Filtri Rapidi -->
+            <div class="filters-container" id="quick-filters" style="margin-bottom: 0;">
+                <button class="filter-chip active" onclick="setQuickFilter('all', this)">Tutte le piante</button>
+                <button class="filter-chip" onclick="setQuickFilter('vaso', this)">🪴 In vaso</button>
+                <button class="filter-chip" onclick="setQuickFilter('terra', this)">🌍 Piena terra</button>
+                <button class="filter-chip" onclick="setQuickFilter('seme', this)">🌱 Da seme</button>
+                <button class="filter-chip" onclick="setQuickFilter('innesto', this)">🔪 Innestate</button>
+                <button class="filter-chip gelo" onclick="setQuickFilter('gelo', this)">❄️ Gelo</button>
+            </div>
+        </div>
+
+        <!-- Calendario Globale (A Scomparsa) -->
+        <div id="global-stats-view" class="dashboard-panel hidden" style="border-color: var(--purple);">
+            <div style="display:flex; justify-content:space-between; align-items:center;">
+                <h3 style="color:var(--purple); margin-top:0;">📊 Eventi (Fioriture e raccolti)</h3>
+                <button class="btn" style="background:transparent; color:#333; border:1px solid #ccc;" onclick="toggleGlobalStats()">✖ Chiudi</button>
+            </div>
+            <p style="font-size:14px; margin-top:0;">Visualizza in un'unica mappa temporale i periodi di fioritura e raccolto di tutto il tuo giardino.</p>
+            <div class="global-chart-wrapper">
+                <canvas id="globalEventsChart"></canvas>
+            </div>
+        </div>
+
+        <!-- BOX EMERGENZA GELO -->
+        <div id="frost-emergency-box" class="dashboard-panel hidden" style="border-color: #1e88e5; background-color: #e3f2fd; padding: 15px; margin-bottom: 20px; display: flex; align-items: center; gap: 15px; flex-wrap: wrap;">
+            <div style="flex-grow: 1; min-width: 200px;">
+                <h4 style="margin: 0; color: #1565c0; font-size: 16px;">Allarme Gelo</h4>
+                <p style="margin: 2px 0 0 0; font-size: 13px; color: #0d47a1;">Imposta la temperatura prevista. Il sistema mostrerà le piante in pericolo (che richiedono una temperatura <strong>uguale o superiore</strong> a quella indicata).</p>
+            </div>
+            <div style="display: flex; align-items: center; gap: 8px;">
+                <input type="number" id="frost-temp-input" value="5" oninput="renderPlants()" style="width: 80px; font-size: 18px; text-align: center; border: 2px solid #1e88e5; border-radius: 6px; padding: 5px; font-weight: bold; color: #1565c0; outline: none; background: white;">
+                <span style="font-weight: bold; color: #1565c0; font-size: 18px;">°C</span>
+            </div>
+        </div>
+
+        <!-- Contatori -->
+        <div id="dashboard-stats" class="hidden">
+            🌿 Piante totali: <span id="count-plants">0</span> | 🧬 Specie uniche: <span id="count-species">0</span>
+        </div>
+
+        <!-- Form Aggiungi/Modifica Pianta -->
+        <div id="form-container" class="hidden">
+            <h2 id="form-title" style="margin-top:0; color:var(--primary); padding-bottom:5px;">Aggiungi nuova pianta</h2>
+            
+            <div class="form-grid">
+                <!-- SEZIONE 1: Dati principali -->
+                <h3 class="form-section-title">📋 Dati principali</h3>
+                <div><label>Nome*:</label><input type="text" id="p-name" placeholder="es. Yellow pitahaya 1"></div>
+                <div><label>Nome scientifico:</label><input type="text" id="p-scientific"></div>
+                
+                <div style="grid-column: span 2;">
+                    <label>Fornitore (Link o nome):</label>
+                    <div style="display: flex; gap: 5px;">
+                        <select id="p-vendor-select" style="flex: 1;"></select>
+                        <input type="text" id="p-vendor-input" placeholder="es. www.sito.it" style="flex: 1; display: none;">
+                        <button class="btn btn-warning" type="button" id="btn-toggle-vendor" onclick="toggleVendorMode()" style="margin: 0; padding: 5px 10px;">➕ Nuovo</button>
+                    </div>
+                </div>
+
+                <!-- SEZIONE 2: Origine e genetica -->
+                <h3 class="form-section-title">🌱 Origine e genetica</h3>
+                <div>
+                    <label>Origine / Propagazione:</label>
+                    <select id="p-origin" onchange="toggleFidelityField()">
+                        <option value="Da seme">Da seme</option>
+                        <option value="Da talea">Da talea</option>
+                        <option value="Innesto">Innesto</option>
+                        <option value="Margotta">Margotta</option>
+                        <option value="Non so / Altro">Non so / Altro</option>
+                    </select>
+                </div>
+                <div>
+                    <label>Data semina / Inizio:</label>
+                    <input type="date" id="p-sowing-date">
+                </div>
+
+                <div id="fidelity-container" style="grid-column: span 2; display: none;">
+                    <label>🧬 Fedeltà al seme:</label>
+                    <select id="p-genetic-fidelity">
+                        <option value="Non ancora valutato">Non ancora valutato</option>
+                        <option value="Identico alla madre">Identico alla madre</option>
+                        <option value="Molto simile">Molto simile</option>
+                        <option value="Diverso (Nuova varietà)">Diverso (Nuova varietà!)</option>
+                    </select>
+                </div>
+
+                <div style="grid-column: span 2;">
+                    <label>🧬 Albero genealogico:</label>
+                    <div style="display:flex; gap:15px; flex-wrap: wrap; margin-top: 5px;">
+                        <div style="flex:1; min-width: 200px;"><label>Pianta madre:</label><select id="p-mother"></select></div>
+                        <div style="flex:1; min-width: 200px;"><label>Pianta padre (per semi ibridi):</label><select id="p-father"></select></div>
+                    </div>
+                </div>
+
+                <!-- SEZIONE 3: Ambiente e posizione -->
+                <h3 class="form-section-title">🌍 Ambiente e posizione</h3>
+                
+                <div id="form-placement-section" style="grid-column: span 2;">
+                    <label>Sistemazione iniziale:</label>
+                    <div style="display: flex; gap: 10px;">
+                        <select id="p-placement" onchange="togglePotSizeField()" style="flex: 1;">
+                            <option value="Vaso">Vaso</option>
+                            <option value="Piena terra">Piena terra</option>
+                            <option value="Idroponica">Idroponica</option>
+                        </select>
+                        <div id="pot-size-container" style="display: flex; align-items: center; gap: 5px; flex: 1;">
+                            <input type="number" id="p-pot-size" placeholder="es. 15" style="width: 100%;" min="0">
+                            <span style="font-size: 14px;">Litri</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div>
+                    <label>Substrato / Terriccio:</label>
+                    <div style="display: flex; gap: 5px;">
+                        <select id="p-soil-select" style="flex: 1;"></select>
+                        <input type="text" id="p-soil-input" placeholder="es. Torba e perlite" style="flex: 1; display: none;">
+                        <button class="btn btn-warning" type="button" id="btn-toggle-soil" onclick="toggleSoilMode()" style="margin: 0; padding: 5px 10px;">➕ Nuovo</button>
+                    </div>
+                </div>
+
+                <div>
+                    <label>pH Terreno:</label>
+                    <input type="number" id="p-ph" step="0.1" min="0" max="14" placeholder="es. 6.5">
+                </div>
+
+                <div>
+                    <label>Temp. minima tollerata (°C):</label>
+                    <input type="number" id="p-min-temp" placeholder="es. 5">
+                </div>
+
+                <div style="grid-column: span 2;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 5px;">
+                        <label style="margin:0;">📍 Posizione e coordinate:</label>
+                        <select id="p-saved-locations" onchange="fillSavedLocation()" style="width: auto; padding: 4px; font-size: 13px;">
+                            <option value="">Scegli da "I miei luoghi"...</option>
+                        </select>
+                    </div>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 15px;">
+                        <div><input type="text" id="p-location" placeholder="Luogo (es. serra, balcone)"></div>
+                        <div style="display: flex; gap: 5px;">
+                            <input type="text" id="p-lat" placeholder="Latitudine">
+                            <input type="text" id="p-lng" placeholder="Longitudine">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- SEZIONE 4: Note e Media -->
+                <h3 class="form-section-title">📝 Note e foto</h3>
+
+                <div style="grid-column: span 2;">
+                    <label>Note generali:</label>
+                    <textarea id="p-notes" rows="3" placeholder="Scrivi qui eventuali note sulla pianta..."></textarea>
+                </div>
+
+                <div style="grid-column: span 1;">
+                    <label>Foto pianta (intera):</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="file" id="p-photo" accept="image/*" style="flex: 1;">
+                        <button type="button" class="btn btn-danger" style="margin: 0; padding: 5px;" onclick="removePhoto('main')">🗑️</button>
+                    </div>
+                    <small id="photo-status-main" style="color: var(--danger); font-weight: bold; display: none;">Rimossa! Salva per confermare.</small>
+                </div>
+
+                <div style="grid-column: span 1;">
+                    <label>Foto del frutto (dettaglio):</label>
+                    <div style="display: flex; gap: 10px; align-items: center;">
+                        <input type="file" id="p-fruit-photo" accept="image/*" style="flex: 1;">
+                        <button type="button" class="btn btn-danger" style="margin: 0; padding: 5px;" onclick="removePhoto('fruit')">🗑️</button>
+                    </div>
+                    <small id="photo-status-fruit" style="color: var(--danger); font-weight: bold; display: none;">Rimossa! Salva per confermare.</small>
+                </div>
+
+            </div>
+            
+            <div style="margin-top: 25px; display: flex; gap: 10px;">
+                <button class="btn" style="flex:1;" onclick="savePlant()">💾 Salva dati pianta</button>
+                <button class="btn btn-warning" style="flex:1;" onclick="closePlantForm()">❌ Annulla</button>
+            </div>
+        </div>
+
+        <!-- Griglia Principale (Solo piante attive) -->
+        <div id="plants-grid"></div>
+    </div>
+
+    <!-- VISTA MAPPA GLOBALE DEDICATA -->
+    <div id="global-map-page" class="hidden" style="background: white; padding: 25px; border-radius: 8px; box-shadow: 0 4px 10px rgba(0,0,0,0.2);">
+        <div class="detail-header">
+            <h2 style="margin:0; color: var(--blue);">🗺️ Mappa globale del giardino</h2>
+            <button class="btn btn-grey" onclick="closeGlobalMapView()">⬅️ Torna al giardino</button>
+        </div>
+        <p style="font-size:14px; margin-top:0;">Visualizza la posizione di tutte le tue piante. <strong>Clicca su un segnaposto per vedere le piante presenti in quel punto.</strong></p>
+        
+        <div id="global-map-fullscreen" style="height: 50vh; width: 100%; border-radius: 8px; border: 2px solid var(--blue); z-index: 1;"></div>
+        
+        <div style="margin-top: 25px; border-top: 2px solid #eee; padding-top: 20px;">
+            <h3 style="margin-top:0; color: var(--primary);">📍 Piante in questa posizione:</h3>
+            <div id="map-plants-list" class="my-data-grid">
+                <p style="color: #666; grid-column: 1 / -1;">Tocca un indicatore sulla mappa per mostrare l'elenco.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- BARRA FLUTTUANTE AZIONI DI MASSA -->
+    <div id="batch-action-bar" class="hidden" style="position:fixed; bottom:20px; left:50%; transform:translateX(-50%); background:white; padding:15px 25px; border-radius:30px; box-shadow:0 10px 25px rgba(0,0,0,0.3); z-index:1000; display:flex; gap:15px; align-items:center; border: 3px solid var(--accent);">
+        <span id="batch-count" style="font-weight:bold; color:var(--text); font-size: 16px;">0 piante selezionate</span>
+        <button class="btn btn-warning" onclick="openBatchModal()">📝 Aggiungi evento a tutte</button>
+        <button class="btn btn-grey" onclick="toggleBatchMode()">❌ Annulla</button>
+    </div>
+
+    <!-- MODAL EVENTO DI MASSA -->
+    <div id="batch-modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:10000; justify-content:center; align-items:center;">
+        <div style="background:white; padding:25px; border-radius:8px; max-width:400px; width:90%; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+            <h3 style="margin-top:0; color:var(--accent);">📝 Evento di massa</h3>
+            <p style="font-size:14px; margin-bottom:15px; color:#444;">Questo evento verrà aggiunto automaticamente al diario di tutte le piante selezionate.</p>
+            
+            <label style="font-weight:bold;">Data:</label>
+            <input type="date" id="batch-log-date" style="margin-bottom:10px;">
+            
+            <label style="font-weight:bold;">Tipo evento:</label>
+            <select id="batch-log-type" style="margin-bottom:10px;">
+                <option value="Concimazione">🧪 Concimazione / Nutrimento</option>
+                <option value="Trattamento">🛡️ Trattamento fitosanitario</option>
+                <option value="Irrigazione">💧 Irrigazione speciale</option>
+                <option value="Spostamento">🚚 Spostamento</option>
+                <option value="Stato di Salute">Stato di salute</option>
+            </select>
+
+            <label style="font-weight:bold;">Nota / Prodotto usato:</label>
+            <textarea id="batch-log-note" rows="3" style="margin-bottom:20px;" placeholder="es. Concimazione con potassio liquido"></textarea>
+            
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-warning" style="flex:1;" onclick="confirmBatchLog()">Applica a tutte</button>
+                <button class="btn btn-grey" style="flex:1;" onclick="closeBatchModal()">Annulla</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DUPLICAZIONE PIANTA -->
+    <div id="duplicate-modal-overlay" style="display:none; position:fixed; top:0; left:0; width:100%; height:100%; background:rgba(0,0,0,0.6); z-index:10000; justify-content:center; align-items:center;">
+        <div style="background:white; padding:25px; border-radius:8px; max-width:400px; width:90%; box-shadow: 0 4px 15px rgba(0,0,0,0.3);">
+            <h3 style="margin-top:0; color:var(--primary);">📑 Duplica pianta</h3>
+            <p style="font-size:14px; margin-bottom:15px; color:#444;">Imposta il nome base e quante copie vuoi creare. <strong>Verranno copiati esattamente tutti i dati</strong>: foto, cronologia, note ed eventi del diario!</p>
+            
+            <label style="font-weight:bold;">Nome nuova pianta (nome base):</label>
+            <input type="text" id="dup-base-name" style="margin-bottom:15px; border: 1px solid var(--secondary);">
+            
+            <label style="font-weight:bold;">Quantità da clonare:</label>
+            <input type="number" id="dup-qty" min="1" value="1" style="margin-bottom:20px; border: 1px solid var(--secondary);">
+            
+            <div style="display:flex; gap:10px;">
+                <button class="btn btn-blue" style="flex:1;" onclick="confirmDuplicate()">Clona piante</button>
+                <button class="btn btn-warning" style="flex:1;" onclick="closeDuplicateModal()">Annulla</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA SCANNER ETICHETTE -->
+    <div id="labels-scanner-view" class="hidden">
+        <div style="display:flex; justify-content:space-between; align-items:center; border-bottom:2px solid #ccc; padding-bottom:10px; margin-bottom: 20px;">
+            <h2 style="margin:0;">🏷️ Scanner etichette</h2>
+            <button class="btn btn-warning" onclick="closeLabelsView()">❌ Torna al giardino</button>
+        </div>
+        <p>Clicca il tasto sottostante per attivare la fotocamera e inquadra il QR Code stampato.</p>
+        <button class="btn btn-blue" onclick="startScanner()" style="margin-bottom: 20px; font-size: 18px;">📷 Leggi etichetta</button>
+        <div id="reader-container" style="display:none;"><div id="reader"></div></div>
+    </div>
+
+    <!-- VISTA "I MIEI DATI" -->
+    <div id="my-data-page" class="hidden">
+        <div class="detail-header">
+            <h2 style="margin:0; color: var(--grey);">📂 Il mio centro dati</h2>
+            <button class="btn btn-grey" onclick="closeMyDataView()">⬅️ Torna al giardino</button>
+        </div>
+        
+        <div class="detail-grid">
+            <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-top: 4px solid var(--grey);">
+                <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
+                    <h3 style="margin:0; color:var(--grey);">📊 Dati e statistiche</h3>
+                    <div style="display: flex; gap: 5px;">
+                        <!-- TASTO EXPORT EXCEL -->
+                        <button class="btn" style="background-color: #217346; margin: 0; font-size: 13px;" onclick="exportToCSV()">📊 Esporta Excel (CSV)</button>
+                        <button class="btn btn-blue" style="margin: 0; font-size: 13px;" onclick="toggleGeneralList()">📋 Mostra elenco</button>
+                    </div>
+                </div>
+                
+                <div id="general-list-container" class="hidden" style="margin-bottom: 20px;">
+                    <label style="font-size: 14px; font-weight: bold; color: var(--primary);">Elenco completo delle tue piante (Copia e incolla):</label>
+                    <textarea id="general-list-textarea" readonly style="width: 100%; height: 150px; font-family: monospace; font-size: 14px; padding: 10px; margin-top: 5px; resize: vertical; border: 1px solid var(--secondary); border-radius: 5px;"></textarea>
+                </div>
+
+                <div id="my-data-content"></div>
+            </div>
+
+            <div style="background: white; padding: 20px; border-radius: 8px; box-shadow: 0 2px 8px rgba(0,0,0,0.05); border-top: 4px solid var(--accent); display: flex; flex-direction: column;">
+                <h3 style="margin-top:0; color:var(--accent); border-bottom: 2px solid #eee; padding-bottom: 10px;">📝 Note generali del giardino</h3>
+                <p style="font-size: 14px; color: #555; margin-top: 0;">Appunta qui idee, progetti futuri, liste della spesa o promemoria.</p>
+                <textarea id="global-garden-notes" style="flex-grow: 1; min-height: 250px; border: 1px solid #ccc; border-radius: 5px; padding: 10px; resize: vertical;"></textarea>
+                <button class="btn btn-warning" style="width: 100%; margin-top: 15px;" onclick="saveGardenNotes()">💾 Salva note del giardino</button>
+                <small id="global-notes-status" style="color: var(--primary); font-weight: bold; display: none; margin-top: 5px; text-align: center;">Note salvate con successo!</small>
+            </div>
+        </div>
+    </div>
+
+    <!-- VISTA ARCHIVIO STORICO -->
+    <div id="archive-page" class="hidden">
+        <div class="detail-header">
+            <h2 style="margin:0; color: var(--danger);">🥀 Archivio piante perse</h2>
+            <button class="btn btn-grey" onclick="closeArchiveView()">⬅️ Torna a I miei dati</button>
+        </div>
+        <p style="margin-top: 0; color: #555;">La storia delle piante che non ci sono più. Cliccaci sopra per ripristinarle se si riprendono!</p>
+        <div id="archive-grid"></div>
+    </div>
+
+    <!-- Vista Dettaglio Pianta -->
+    <div id="plant-detail-view" class="hidden">
+        <div class="detail-header">
+            <h2 id="detail-title" style="margin:0;">Nome pianta</h2>
+            <div>
+                <button class="btn btn-blue" onclick="openDuplicateModal()">📑 Duplica</button>
+                <button class="btn btn-warning" onclick="editCurrentPlant()">✏️ Modifica dettagli</button>
+                <button class="btn btn-danger" onclick="deleteCurrentPlant()">🗑️ Elimina pianta</button>
+                <button class="btn" onclick="closePlantDetail()">⬅️ Chiudi scheda</button>
+            </div>
+        </div>
+
+        <div class="info-map-container">
+            <div style="flex: 3; display: flex; flex-direction: column; gap: 10px;">
+                <div id="detail-info" style="background:#f9f9f9; padding:15px; border-radius:5px; border: 1px solid #e0e0e0; font-size: 15px;"></div>
+                
+                <!-- Rendering Doppia Foto -->
+                <div class="photos-container" id="detail-photos-container"></div>
+            </div>
+
+            <div style="flex: 1; background:#f9f9f9; padding:10px; border-radius:5px; border: 1px solid #e0e0e0; display: flex; flex-direction: column;">
+                <h4 style="margin: 0 0 8px 0; font-size: 13px; color: var(--primary);">📍 Mappa</h4>
+                <div id="map-container" style="flex: 1; min-height: 110px; border-radius: 5px; border: 1px solid #ccc; z-index: 1;"></div>
+            </div>
+        </div>
+
+        <div class="detail-grid">
+            <!-- Diario e Cronologia -->
+            <div>
+                <div class="diary-section">
+                    <h3 style="margin-top:0;">📝 Aggiungi evento al diario</h3>
+                    <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 10px;">
+                        <div><label>Data:</label><input type="date" id="log-date"></div>
+                        <div>
+                            <label>Tipo di evento:</label>
+                            <select id="log-type" onchange="toggleDynamicFields()">
+                                <option value="Misurazione">📏 Misurazione altezza</option>
+                                <option value="Misurazione pH">🧪 Misurazione pH</option>
+                                <option value="Concimazione">🧪 Concimazione / Nutrimento</option>
+                                <option value="Stato di Salute">Stato di salute</option>
+                                <option value="Fioritura">🌸 Fioritura</option>
+                                <option value="Fruttificazione">🍋 Fruttificazione</option>
+                                <option value="Raccolto">🧺 Raccolto</option>
+                                <option value="Rinvaso / Sistemazione">🪴 Rinvaso / Cambio sistemazione</option>
+                                <option value="Innesto">🔪 Innesto (cambio varietà)</option>
+                                <option value="Spostamento">🚚 Spostamento</option>
+                            </select>
+                        </div>
+                    </div>
+                    
+                    <div id="height-container" style="margin-bottom: 10px;">
+                        <label>Altezza:</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="number" id="log-height" min="0" style="width: auto; flex-grow: 1;">
+                            <span style="font-weight: bold; color: var(--primary); font-size: 16px;">cm</span>
+                        </div>
+                    </div>
+
+                    <div id="ph-container" style="display:none; margin-bottom: 10px;">
+                        <label>Valore pH (da 0 a 14):</label>
+                        <div style="display: flex; align-items: center; gap: 8px;">
+                            <input type="number" id="log-ph" step="0.1" min="0" max="14" style="width: auto; flex-grow: 1;">
+                            <span style="font-weight: bold; color: var(--primary); font-size: 16px;">pH</span>
+                        </div>
+                    </div>
+
+                    <div id="harvest-container" style="display:none; margin-bottom: 10px;">
+                        <label>Quantità raccolto:</label>
+                        <input type="text" id="log-harvest" placeholder="es. 2 kg, 15 frutti...">
+                    </div>
+
+                    <div id="repot-container" style="display:none; margin-bottom: 10px; background: #e8f5e9; padding: 10px; border-radius: 5px; border: 1px solid var(--secondary);">
+                        <label style="color: var(--primary); font-weight: bold;">Nuova sistemazione:</label>
+                        <div style="display: flex; gap: 10px; margin-top: 5px;">
+                            <select id="log-placement" onchange="toggleLogPotSize()" style="flex: 1;">
+                                <option value="Vaso">Vaso</option>
+                                <option value="Piena terra">Piena terra</option>
+                                <option value="Idroponica">Idroponica</option>
+                            </select>
+                            <div id="log-pot-container" style="display: flex; align-items: center; gap: 5px; flex: 1;">
+                                <input type="number" id="log-pot-size" placeholder="es. 20" style="width: 100%;" min="0">
+                                <span style="font-size: 14px;">Litri</span>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div id="graft-container" style="display:none; margin-bottom: 10px; background: #fff3e0; padding: 10px; border-radius: 5px; border: 1px solid var(--accent);">
+                        <label style="color: var(--accent); font-weight: bold;">Nuovo nome pianta (varietà innestata):</label>
+                        <input type="text" id="log-graft-name" style="width: 100%; margin-top: 5px;" placeholder="es. Avocado Beacon">
+                    </div>
+
+                    <label>Note sull'evento / Prodotto usato:</label>
+                    <textarea id="log-note" rows="2"></textarea>
+                    
+                    <div style="margin-top: 10px;">
+                        <label>Foto evento (opzionale):</label>
+                        <input type="file" id="log-photo" accept="image/*">
+                    </div>
+
+                    <button class="btn" style="width: 100%; margin-top: 15px;" onclick="addDiaryLog()">➕ Salva nel diario</button>
+                </div>
+
+                <div class="timeline-wrapper">
+                    <ul class="timeline" id="detail-timeline"></ul>
+                </div>
+            </div>
+
+            <!-- Grafici Singola Pianta -->
+            <div>
+                <div class="charts-header">
+                    <h3 style="margin: 0;">📊 Analisi grafica</h3>
+                    <div>
+                        <label for="chart-year-filter" style="font-size: 14px; font-weight: bold;">Filtra per anno:</label>
+                        <select id="chart-year-filter" onchange="updateChartsFromDropdown()" style="padding: 4px; border-radius: 4px; border: 1px solid var(--secondary);">
+                            <option value="all">Tutti gli anni</option>
+                        </select>
+                    </div>
+                </div>
+                <div class="charts-wrapper">
+                    <div class="chart-container"><canvas id="growthChart"></canvas></div>
+                    <div class="chart-container"><canvas id="eventsChart"></canvas></div>
+                </div>
+            </div>
+        </div>
+
+        <div id="archive-section" style="margin-top: 30px; padding: 20px; background: #ffebee; border: 1px solid #ffcdd2; border-radius: 8px; text-align: center;">
+            <h4 style="margin-top: 0; margin-bottom: 5px; color: var(--danger);">🥀 Archivio storico</h4>
+            <p style="font-size: 14px; color: #555; margin-top: 0;">Sposta la pianta nell'archivio per conservarne la storia senza ingombrare la pagina principale.</p>
+            <button id="btn-archive-toggle" class="btn btn-danger" onclick="toggleArchiveStatus()">Archivia pianta</button>
+        </div>
+
+        <div style="margin-top: 30px; padding-top: 20px; border-top: 2px solid var(--secondary); text-align: center;">
+            <h3 style="color: var(--primary);">🏷️ Etichetta stampabile</h3>
+            <button class="btn btn-blue" onclick="window.print()">🖨️ Stampa questa etichetta</button>
+            <div style="margin-top: 20px;">
+                <div id="print-area" class="print-label">
+                    <h3 id="label-name">Nome Pianta</h3>
+                    <p><em id="label-scientific">Specie</em></p>
+                    <p><strong>Origine:</strong> <span id="label-origin">Seme</span></p>
+                    <div class="qrcode-container" id="detail-qr-code"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+</div>
+
+<!-- SCRIPT "SPAZZINO" PER PULIRE LA VECCHIA CACHE INCEPPATA -->
 <script>
     if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('sw.js').then(registration => {
-                console.log('PWA ServiceWorker registrato.');
-                registration.addEventListener('updatefound', () => {
-                    const newWorker = registration.installing;
-                    newWorker.addEventListener('statechange', () => {
-                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            console.log('Nuovo aggiornamento disponibile!');
-                            // Ricarica la pagina silenziosamente per applicare il nuovo codice di GitHub
-                            window.location.reload(); 
-                        }
-                    });
-                });
-            }).catch(error => {
-                console.log('Registrazione PWA fallita:', error);
-            });
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for(let registration of registrations) {
+                registration.unregister();
+                console.log('Vecchio Service Worker eliminato.');
+            }
+        });
+        caches.keys().then(function(names) {
+            for (let name of names) {
+                caches.delete(name);
+                console.log('Vecchia cache eliminata:', name);
+            }
         });
     }
 </script>

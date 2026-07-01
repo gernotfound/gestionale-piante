@@ -11,6 +11,8 @@ let html5QrcodeScanner = null;
 let editingMode = false;
 let unsavedChanges = false;
 let currentQuickFilter = 'all';
+let frostThreshold = 5;
+let previousView = 'dashboard'; // Memoria per tornare alla Mappa o alla Dashboard
 
 // Variabili per la Mappa Globale
 let globalMap = null;
@@ -167,7 +169,7 @@ function startAppUI() {
 
 function createNewGarden() {
     if(plantsDatabase.length > 0) {
-        if(!confirm("⚠️ ATTENZIONE: Creando un nuovo giardino ora, perderai l'accesso a quello attuale (a meno che tu non abbia salvato il Backup). Vuoi procedere?")) return;
+        if(!confirm("⚠️ ATTENZIONE: Creando un nuovo giardino ora, perderai l'accesso a quello attuale (a meno che tu non abbia salvato il Backup ZIP). Vuoi procedere?")) return;
     }
     plantsDatabase = [];
     gardenTitle = "🌿 Gestione Piante Tropicali - Pro";
@@ -185,9 +187,28 @@ function startNewProfile() {
     saveToLocal(); 
 }
 
-function logout() {
+// LOGOUT DEFINITIVO (Svuota IndexedDB per permettere nuovi caricamenti)
+async function logout() {
     if(confirm("Vuoi davvero uscire dal giardino? Assicurati di aver esportato il Backup se devi spostare i dati su un altro PC.")) {
-        if(isBatchMode) toggleBatchMode(); // Nascondi macro se attiva
+        if(isBatchMode) toggleBatchMode(); 
+        
+        // Svuota la memoria RAM
+        plantsDatabase = [];
+        gardenTitle = "🌿 Gestione Piante Tropicali - Pro";
+        gardenNotes = "";
+        unsavedChanges = false;
+
+        // Elimina il salvataggio automatico da IndexedDB
+        try {
+            let db = await initDB();
+            let tx = db.transaction(STORE_NAME, 'readwrite');
+            let store = tx.objectStore(STORE_NAME);
+            store.delete('autosave_data');
+        } catch(e) {
+            console.error("Errore durante la cancellazione del DB:", e);
+        }
+
+        // Nascondi la UI
         document.getElementById('dashboard').classList.add('hidden');
         document.getElementById('my-data-page').classList.add('hidden');
         document.getElementById('archive-page').classList.add('hidden');
@@ -196,11 +217,12 @@ function logout() {
         document.getElementById('form-container').classList.add('hidden');
         document.getElementById('frost-emergency-box').classList.add('hidden');
         
+        // Torna alla Home in modo pulito
         document.getElementById('startup-screen').classList.remove('hidden');
     }
 }
 
-// GESTIONE FILTRI E GELO (CORRETTA!)
+// GESTIONE FILTRI E GELO (Niente Prompt)
 function setQuickFilter(filterType, btnElement) {
     currentQuickFilter = filterType;
     document.querySelectorAll('.filter-chip').forEach(btn => btn.classList.remove('active'));
@@ -255,7 +277,7 @@ function confirmBatchLog() {
 
 // --- I MIEI DATI & ARCHIVIO ---
 function openMyDataView() { 
-    if(isBatchMode) toggleBatchMode(); // Nascondi macro se attiva
+    if(isBatchMode) toggleBatchMode(); 
     document.getElementById('dashboard').classList.add('hidden'); 
     document.getElementById('my-data-page').classList.remove('hidden'); 
     document.getElementById('general-list-container').classList.add('hidden');
@@ -316,7 +338,7 @@ function renderMyData() {
 
 // --- MAPPA GLOBALE DEDICATA ---
 function openGlobalMapView() {
-    if(isBatchMode) toggleBatchMode(); // Nascondi macro se attiva
+    if(isBatchMode) toggleBatchMode(); 
     document.getElementById('dashboard').classList.add('hidden');
     document.getElementById('global-map-page').classList.remove('hidden');
     document.getElementById('map-plants-list').innerHTML = '<p style="color: #666; grid-column: 1 / -1;">Tocca un indicatore sulla mappa per mostrare l\'elenco delle piante in quella posizione.</p>';
@@ -382,7 +404,8 @@ function showMapPlantsList(plantsList) {
     plantsList.forEach(plant => {
         const card = document.createElement('div');
         card.className = 'plant-card';
-        card.onclick = () => { closeGlobalMapView(); openPlantDetail(plant.id); };
+        // Memorizza che siamo entrati dalla Mappa!
+        card.onclick = () => { previousView = 'map'; closeGlobalMapView(); openPlantDetail(plant.id); };
         
         let imgSrc = plant.fruitPhoto || plant.photo || 'https://via.placeholder.com/300x200?text=Nessuna+Foto';
         let sistemazioneLabel = plant.placement || 'Vaso'; 
@@ -404,7 +427,7 @@ function showMapPlantsList(plantsList) {
 
 // --- SCANNER E GRAFICI GLOBALI ---
 function openLabelsView() { 
-    if(isBatchMode) toggleBatchMode(); // Nascondi macro se attiva
+    if(isBatchMode) toggleBatchMode(); 
     document.getElementById('dashboard').classList.add('hidden'); 
     document.getElementById('labels-scanner-view').classList.remove('hidden'); 
 }
@@ -417,7 +440,7 @@ function onScanSuccess(decodedText, decodedResult) {
             html5QrcodeScanner.clear().then(() => {
                 html5QrcodeScanner = null; document.getElementById('reader-container').style.display = 'none'; document.getElementById('labels-scanner-view').classList.add('hidden');
                 const exists = plantsDatabase.find(p => p.id === data.plant_id);
-                if(exists) openPlantDetail(data.plant_id); else { alert("Pianta non trovata! Forse è stata eliminata definitivamente."); document.getElementById('dashboard').classList.remove('hidden'); }
+                if(exists) { previousView = 'dashboard'; openPlantDetail(data.plant_id); } else { alert("Pianta non trovata! Forse è stata eliminata definitivamente."); document.getElementById('dashboard').classList.remove('hidden'); }
             });
         } else { throw new Error("Formato errato"); }
     } catch(e) { alert("Codice non riconosciuto. Assicurati di usare il nuovo QR Code."); }
@@ -455,7 +478,6 @@ function loadProfile(event) {
     const file = event.target.files[0];
     if (!file) return;
     
-    // Sicurezza Anti-Sovrascrittura
     if (plantsDatabase.length > 0) {
         if (!confirm("⚠️ ATTENZIONE: Stai per caricare un Backup. Questa operazione sovrascriverà il giardino attualmente aperto.\nHai esportato il giardino attuale prima di procedere?")) {
             event.target.value = ''; 
@@ -757,12 +779,15 @@ function closePlantForm() {
 
 function clearForm() {
     document.querySelectorAll('#form-container input, #form-container textarea, #form-container select').forEach(el => { 
-        if (el.id !== 'p-origin' && el.id !== 'p-placement' && el.id !== 'p-genetic-fidelity') { 
+        if (el.id !== 'p-origin' && el.id !== 'p-placement' && el.id !== 'p-genetic-fidelity' && el.id !== 'search-plant' && el.id !== 'frost-temp-input') { 
             el.value = ''; 
         } 
     });
+    
+    setVendorMode('select');
+    setSoilMode('select');
+    
     document.getElementById('p-genetic-fidelity').value = 'Non ancora valutato';
-    document.getElementById('search-plant').value = ''; 
     mainPhotoRemoved = false; 
     fruitPhotoRemoved = false; 
     document.getElementById('photo-status-main').style.display = 'none'; 
@@ -867,6 +892,7 @@ function renderPlants() {
                 else { selectedBatchPlants.add(plant.id); card.classList.add('selected-for-batch'); }
                 updateBatchCounter();
             } else {
+                previousView = 'dashboard';
                 openPlantDetail(plant.id);
             }
         };
@@ -877,6 +903,7 @@ function renderPlants() {
         let sistemazioneLabel = plant.placement || 'Vaso'; let vol = plant.potSize || plant.pot; if (sistemazioneLabel === 'Vaso' && vol) sistemazioneLabel += ` (${escapeHTML(vol)} L)`;
         let origLabel = plant.origin || plant.type || 'Non so / Altro';
         
+        // Nuovi Badge
         let tempBadge = plant.minTemp !== undefined && plant.minTemp !== "" ? `<span style="background:#e3f2fd; color:#1565c0; padding:2px 6px; border-radius:4px; font-size:12px; margin-left:5px; font-weight:bold;">❄️ Min: ${plant.minTemp}°C</span>` : '';
         let phBadge = plant.phTerreno !== undefined && plant.phTerreno !== "" ? `<span style="background:#e8f5e9; color:#2e7d32; padding:2px 6px; border-radius:4px; font-size:12px; margin-left:5px; font-weight:bold;">🧪 pH: ${plant.phTerreno}</span>` : '';
 
@@ -899,7 +926,7 @@ function renderArchive() {
 
     archivedPlants.forEach(plant => {
         const card = document.createElement('div'); card.className = 'plant-card'; card.style.borderLeftColor = 'var(--danger)'; 
-        card.onclick = () => openPlantDetail(plant.id);
+        card.onclick = () => { previousView = 'archive'; openPlantDetail(plant.id); };
         let imgSrc = 'https://via.placeholder.com/300x200?text=Nessuna+Foto'; if (plant.fruitPhoto && plant.fruitPhoto !== "") imgSrc = plant.fruitPhoto; else if (plant.photo && plant.photo !== "") imgSrc = plant.photo;
         let origLabel = plant.origin || plant.type || 'Non so / Altro';
         card.innerHTML = `<img src="${imgSrc}" class="grayscale-img"><span class="timeline-type" style="margin-left:0; margin-bottom:10px; background-color: var(--danger);">${escapeHTML(origLabel)}</span><h3 style="margin-bottom:5px; color: var(--danger);">${escapeHTML(plant.name)}</h3><p style="margin-top:0; font-size:14px; color:#555;"><em>${escapeHTML(plant.scientific)}</em></p><p style="margin:5px 0; font-size:13px;">Archiviata (Spostata da: ${escapeHTML(plant.location) || 'N/D'})</p>`;
@@ -973,8 +1000,12 @@ function deleteCurrentPlant() {
 function closePlantDetail() {
     document.getElementById('plant-detail-view').classList.add('hidden');
     const plant = plantsDatabase.find(p => p.id === currentPlantId);
-    if (plant && plant.status === 'archived') { openArchiveView(); } 
-    else { 
+    
+    if (previousView === 'map') {
+        openGlobalMapView();
+    } else if (previousView === 'archive' || (plant && plant.status === 'archived')) {
+        openArchiveView();
+    } else {
         document.getElementById('dashboard').classList.remove('hidden'); 
         document.getElementById('dashboard-controls').classList.remove('hidden'); 
         document.getElementById('dashboard-stats').classList.remove('hidden'); 
