@@ -161,6 +161,7 @@ function startAppUI() {
     document.getElementById('dashboard-controls').classList.remove('hidden'); 
     document.getElementById('dashboard-stats').classList.remove('hidden'); 
     document.getElementById('plants-grid').classList.remove('hidden');
+    if (currentQuickFilter === 'gelo') { document.getElementById('frost-emergency-box').classList.remove('hidden'); }
     renderPlants();
 }
 
@@ -197,10 +198,20 @@ function logout() {
     }
 }
 
+// GESTIONE FILTRI E GELO
 function setQuickFilter(filterType, btnElement) {
     currentQuickFilter = filterType;
     document.querySelectorAll('.filter-chip').forEach(btn => btn.classList.remove('active'));
     btnElement.classList.add('active');
+    
+    // Mostra/Nascondi il box dell'allarme gelo
+    const frostBox = document.getElementById('frost-emergency-box');
+    if (filterType === 'gelo') {
+        frostBox.classList.remove('hidden');
+    } else {
+        frostBox.classList.add('hidden');
+    }
+
     renderPlants(); 
 }
 
@@ -387,6 +398,7 @@ function showMapPlantsList(plantsList) {
     
     container.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
+
 
 // --- SCANNER E GRAFICI GLOBALI ---
 function openLabelsView() { document.getElementById('dashboard').classList.add('hidden'); document.getElementById('labels-scanner-view').classList.remove('hidden'); }
@@ -589,7 +601,7 @@ function removePhoto(type) {
 
 function openPlantForm() {
     editingMode = false; currentPlantId = null; document.getElementById('form-title').innerText = "Aggiungi nuova pianta";
-    document.getElementById('dashboard-controls').classList.add('hidden'); document.getElementById('global-stats-view').classList.add('hidden'); document.getElementById('global-map-page').classList.add('hidden'); document.getElementById('dashboard-stats').classList.add('hidden'); document.getElementById('plants-grid').classList.add('hidden'); document.getElementById('my-data-page').classList.add('hidden'); document.getElementById('archive-page').classList.add('hidden'); document.getElementById('form-container').classList.remove('hidden');
+    document.getElementById('dashboard-controls').classList.add('hidden'); document.getElementById('global-stats-view').classList.add('hidden'); document.getElementById('global-map-page').classList.add('hidden'); document.getElementById('frost-emergency-box').classList.add('hidden'); document.getElementById('dashboard-stats').classList.add('hidden'); document.getElementById('plants-grid').classList.add('hidden'); document.getElementById('my-data-page').classList.add('hidden'); document.getElementById('archive-page').classList.add('hidden'); document.getElementById('form-container').classList.remove('hidden');
     document.getElementById('form-placement-section').style.display = 'block';
     if (isBatchMode) toggleBatchMode(); 
     
@@ -632,7 +644,9 @@ function closePlantForm() {
     if (currentPlantId) { 
         openPlantDetail(currentPlantId);
     } else { 
-        document.getElementById('dashboard-controls').classList.remove('hidden'); document.getElementById('dashboard-stats').classList.remove('hidden'); document.getElementById('plants-grid').classList.remove('hidden'); renderPlants(); 
+        document.getElementById('dashboard-controls').classList.remove('hidden'); document.getElementById('dashboard-stats').classList.remove('hidden'); document.getElementById('plants-grid').classList.remove('hidden'); 
+        if (currentQuickFilter === 'gelo') document.getElementById('frost-emergency-box').classList.remove('hidden');
+        renderPlants(); 
     }
 }
 
@@ -699,7 +713,11 @@ function renderPlants() {
         else if (currentQuickFilter === 'terra') filteredPlants = filteredPlants.filter(p => p.placement === 'Piena terra');
         else if (currentQuickFilter === 'seme') filteredPlants = filteredPlants.filter(p => p.origin === 'Da seme' || p.type === 'Pianta da seme');
         else if (currentQuickFilter === 'innesto') filteredPlants = filteredPlants.filter(p => p.origin === 'Innesto' || p.type === 'Pianta innestata');
-        else if (currentQuickFilter === 'gelo') filteredPlants = filteredPlants.filter(p => p.minTemp !== undefined && p.minTemp !== "" && parseFloat(p.minTemp) >= 5);
+        else if (currentQuickFilter === 'gelo') {
+            let frostThreshold = parseFloat(document.getElementById('frost-temp-input').value);
+            if(isNaN(frostThreshold)) frostThreshold = 5; // Protezione se l'utente svuota la casella
+            filteredPlants = filteredPlants.filter(p => p.minTemp !== undefined && p.minTemp !== "" && parseFloat(p.minTemp) >= frostThreshold);
+        }
     }
 
     // ORDINAMENTO (Sorting)
@@ -840,7 +858,14 @@ function closePlantDetail() {
     document.getElementById('plant-detail-view').classList.add('hidden');
     const plant = plantsDatabase.find(p => p.id === currentPlantId);
     if (plant && plant.status === 'archived') { openArchiveView(); } 
-    else { document.getElementById('dashboard').classList.remove('hidden'); document.getElementById('dashboard-controls').classList.remove('hidden'); document.getElementById('dashboard-stats').classList.remove('hidden'); document.getElementById('plants-grid').classList.remove('hidden'); renderPlants(); }
+    else { 
+        document.getElementById('dashboard').classList.remove('hidden'); 
+        document.getElementById('dashboard-controls').classList.remove('hidden'); 
+        document.getElementById('dashboard-stats').classList.remove('hidden'); 
+        document.getElementById('plants-grid').classList.remove('hidden'); 
+        if (currentQuickFilter === 'gelo') { document.getElementById('frost-emergency-box').classList.remove('hidden'); }
+        renderPlants(); 
+    }
 }
 
 function editCurrentPlant() {
@@ -858,7 +883,7 @@ function editCurrentPlant() {
     if(plant.soil) { setSoilMode('select'); document.getElementById('p-soil-select').value = plant.soil; document.getElementById('p-soil-input').value = plant.soil; } else { setSoilMode('select'); }
     document.getElementById('p-location').value = plant.location || ''; document.getElementById('p-notes').value = plant.notes || ''; document.getElementById('p-lat').value = plant.lat || ''; document.getElementById('p-lng').value = plant.lng || '';
     
-    document.getElementById('plant-detail-view').classList.add('hidden'); document.getElementById('dashboard').classList.remove('hidden'); document.getElementById('dashboard-controls').classList.add('hidden'); document.getElementById('dashboard-stats').classList.add('hidden'); document.getElementById('global-stats-view').classList.add('hidden'); document.getElementById('global-map-page').classList.add('hidden'); document.getElementById('plants-grid').classList.add('hidden'); document.getElementById('form-title').innerText = "Modifica dettagli pianta"; document.getElementById('form-container').classList.remove('hidden');
+    document.getElementById('plant-detail-view').classList.add('hidden'); document.getElementById('dashboard').classList.remove('hidden'); document.getElementById('dashboard-controls').classList.add('hidden'); document.getElementById('frost-emergency-box').classList.add('hidden'); document.getElementById('dashboard-stats').classList.add('hidden'); document.getElementById('global-stats-view').classList.add('hidden'); document.getElementById('global-map-page').classList.add('hidden'); document.getElementById('plants-grid').classList.add('hidden'); document.getElementById('form-title').innerText = "Modifica dettagli pianta"; document.getElementById('form-container').classList.remove('hidden');
 }
 
 function toggleLogPotSize() {
