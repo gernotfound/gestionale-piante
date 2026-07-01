@@ -9,11 +9,11 @@
     <link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🥑</text></svg>">
     <link rel="apple-touch-icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🥑</text></svg>">
     
-    <!-- Configurazione per Mobile -->
+    <!-- Configurazione PWA per Mobile -->
     <meta name="theme-color" content="#2e7d32">
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <!-- Temporaneamente rimosso il manifest finché non testiamo che tutto funzioni -->
+    <link rel="manifest" href="manifest.json">
 
     <!-- Libreria per la Mappa (Leaflet) -->
     <link rel="stylesheet" href="https://unpkg.com/leaflet/dist/leaflet.css" />
@@ -382,7 +382,6 @@
                 <div style="display: flex; justify-content: space-between; align-items: center; border-bottom: 2px solid #eee; padding-bottom: 10px; margin-bottom: 15px; flex-wrap: wrap; gap: 10px;">
                     <h3 style="margin:0; color:var(--grey);">📊 Dati e statistiche</h3>
                     <div style="display: flex; gap: 5px;">
-                        <!-- TASTO EXPORT EXCEL -->
                         <button class="btn" style="background-color: #217346; margin: 0; font-size: 13px;" onclick="exportToCSV()">📊 Esporta Excel (CSV)</button>
                         <button class="btn btn-blue" style="margin: 0; font-size: 13px;" onclick="toggleGeneralList()">📋 Mostra elenco</button>
                     </div>
@@ -562,20 +561,24 @@
     </div>
 </div>
 
-<!-- SCRIPT "SPAZZINO" PER PULIRE LA VECCHIA CACHE INCEPPATA -->
+<!-- Registrazione Service Worker per PWA -->
 <script>
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            for(let registration of registrations) {
-                registration.unregister();
-                console.log('Vecchio Service Worker eliminato.');
-            }
-        });
-        caches.keys().then(function(names) {
-            for (let name of names) {
-                caches.delete(name);
-                console.log('Vecchia cache eliminata:', name);
-            }
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('sw.js').then(registration => {
+                console.log('PWA ServiceWorker registrato.');
+                registration.addEventListener('updatefound', () => {
+                    const newWorker = registration.installing;
+                    newWorker.addEventListener('statechange', () => {
+                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
+                            console.log('Nuovo aggiornamento disponibile!');
+                            window.location.reload(); 
+                        }
+                    });
+                });
+            }).catch(error => {
+                console.log('Registrazione PWA fallita:', error);
+            });
         });
     }
 </script>
