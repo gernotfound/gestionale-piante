@@ -106,7 +106,7 @@ function escapeHTML(str) {
 }
 
 function formatDateIt(dateStr) {
-    if (!dateStr) return 'N/D';
+    if (!dateStr || typeof dateStr !== 'string') return 'N/D';
     const parts = dateStr.split('-');
     if (parts.length === 3) return `${parts[2]}/${parts[1]}/${parts[0]}`;
     return dateStr;
@@ -167,7 +167,7 @@ function startAppUI() {
 
 function createNewGarden() {
     if(plantsDatabase.length > 0) {
-        if(!confirm("⚠️ ATTENZIONE: Creando un nuovo profilo ora, perderai l'accesso al giardino attuale (a meno che tu non abbia salvato il Backup ZIP). Vuoi procedere?")) return;
+        if(!confirm("⚠️ ATTENZIONE: Creando un nuovo giardino ora, perderai l'accesso a quello attuale (a meno che tu non abbia salvato il Backup). Vuoi procedere?")) return;
     }
     plantsDatabase = [];
     gardenTitle = "🌿 Gestione Piante Tropicali - Pro";
@@ -187,39 +187,21 @@ function startNewProfile() {
 
 function logout() {
     if(confirm("Vuoi davvero uscire dal giardino? Assicurati di aver esportato il Backup se devi spostare i dati su un altro PC.")) {
+        if(isBatchMode) toggleBatchMode(); // Nascondi macro se attiva
         document.getElementById('dashboard').classList.add('hidden');
         document.getElementById('my-data-page').classList.add('hidden');
         document.getElementById('archive-page').classList.add('hidden');
         document.getElementById('plant-detail-view').classList.add('hidden');
         document.getElementById('global-map-page').classList.add('hidden');
         document.getElementById('form-container').classList.add('hidden');
+        document.getElementById('frost-emergency-box').classList.add('hidden');
         
         document.getElementById('startup-screen').classList.remove('hidden');
     }
 }
 
-// GESTIONE FILTRI E GELO
+// GESTIONE FILTRI E GELO (CORRETTA!)
 function setQuickFilter(filterType, btnElement) {
-    if (filterType === 'gelo') {
-        let tempInput = prompt("❄️ ALLARME GELO\nInserisci la temperatura minima prevista stanotte (es. 3):\n\nIl sistema ti mostrerà in automatico le piante in pericolo (cioè quelle che richiedono una temperatura minima uguale o superiore a quella che inserisci).", "0");
-        
-        if (tempInput === null || tempInput.trim() === "") {
-            return; 
-        }
-        
-        let parsedTemp = parseFloat(tempInput);
-        if (isNaN(parsedTemp)) {
-            alert("Per favore, inserisci un numero valido.");
-            return;
-        }
-        
-        frostThreshold = parsedTemp;
-        btnElement.innerText = `❄️ Gelo (Previsti ${frostThreshold}°C)`;
-    } else {
-        const geloBtn = document.querySelector('.filter-chip.gelo');
-        if(geloBtn) geloBtn.innerText = "❄️ Gelo";
-    }
-
     currentQuickFilter = filterType;
     document.querySelectorAll('.filter-chip').forEach(btn => btn.classList.remove('active'));
     btnElement.classList.add('active');
@@ -238,8 +220,8 @@ function setQuickFilter(filterType, btnElement) {
 function toggleBatchMode() {
     isBatchMode = !isBatchMode; selectedBatchPlants.clear();
     const btn = document.getElementById('btn-batch-mode');
-    if (isBatchMode) { btn.classList.replace('btn-warning', 'btn-danger'); btn.innerText = "Termina selezione"; document.getElementById('batch-action-bar').classList.remove('hidden'); } 
-    else { btn.classList.replace('btn-danger', 'btn-warning'); btn.innerText = "☑️ Macro"; document.getElementById('batch-action-bar').classList.add('hidden'); }
+    if (isBatchMode) { btn.classList.replace('macro-btn', 'btn-danger'); btn.innerText = "Termina selezione"; document.getElementById('batch-action-bar').classList.remove('hidden'); } 
+    else { btn.classList.replace('btn-danger', 'macro-btn'); btn.innerText = "☑️ Macro"; document.getElementById('batch-action-bar').classList.add('hidden'); }
     updateBatchCounter(); renderPlants(); 
 }
 
@@ -273,6 +255,7 @@ function confirmBatchLog() {
 
 // --- I MIEI DATI & ARCHIVIO ---
 function openMyDataView() { 
+    if(isBatchMode) toggleBatchMode(); // Nascondi macro se attiva
     document.getElementById('dashboard').classList.add('hidden'); 
     document.getElementById('my-data-page').classList.remove('hidden'); 
     document.getElementById('general-list-container').classList.add('hidden');
@@ -333,6 +316,7 @@ function renderMyData() {
 
 // --- MAPPA GLOBALE DEDICATA ---
 function openGlobalMapView() {
+    if(isBatchMode) toggleBatchMode(); // Nascondi macro se attiva
     document.getElementById('dashboard').classList.add('hidden');
     document.getElementById('global-map-page').classList.remove('hidden');
     document.getElementById('map-plants-list').innerHTML = '<p style="color: #666; grid-column: 1 / -1;">Tocca un indicatore sulla mappa per mostrare l\'elenco delle piante in quella posizione.</p>';
@@ -356,7 +340,6 @@ function renderGlobalMapFullscreen() {
     let bounds = [];
     let locationGroups = {};
 
-    // Raggruppa le piante con le stesse coordinate
     plantsDatabase.filter(p => p.status !== 'archived').forEach(p => {
         if (p.lat && p.lng) {
             let key = `${parseFloat(p.lat).toFixed(5)}_${parseFloat(p.lng).toFixed(5)}`;
@@ -420,7 +403,11 @@ function showMapPlantsList(plantsList) {
 
 
 // --- SCANNER E GRAFICI GLOBALI ---
-function openLabelsView() { document.getElementById('dashboard').classList.add('hidden'); document.getElementById('labels-scanner-view').classList.remove('hidden'); }
+function openLabelsView() { 
+    if(isBatchMode) toggleBatchMode(); // Nascondi macro se attiva
+    document.getElementById('dashboard').classList.add('hidden'); 
+    document.getElementById('labels-scanner-view').classList.remove('hidden'); 
+}
 function closeLabelsView() { if(html5QrcodeScanner) { html5QrcodeScanner.clear().catch(e => console.error(e)); html5QrcodeScanner = null; } document.getElementById('reader-container').style.display = 'none'; document.getElementById('labels-scanner-view').classList.add('hidden'); document.getElementById('dashboard').classList.remove('hidden'); }
 function startScanner() { if(html5QrcodeScanner) return; document.getElementById('reader-container').style.display = 'block'; html5QrcodeScanner = new Html5QrcodeScanner("reader", { fps: 10, qrbox: {width: 250, height: 250} }, false); html5QrcodeScanner.render(onScanSuccess, onScanFailure); }
 function onScanSuccess(decodedText, decodedResult) {
@@ -467,6 +454,15 @@ function renderGlobalChart() {
 function loadProfile(event) {
     const file = event.target.files[0];
     if (!file) return;
+    
+    // Sicurezza Anti-Sovrascrittura
+    if (plantsDatabase.length > 0) {
+        if (!confirm("⚠️ ATTENZIONE: Stai per caricare un Backup. Questa operazione sovrascriverà il giardino attualmente aperto.\nHai esportato il giardino attuale prima di procedere?")) {
+            event.target.value = ''; 
+            return;
+        }
+    }
+
     if (file.name.endsWith('.zip')) { loadZipProfile(file); } 
     else { alert("Per favore, carica un file di salvataggio .zip valido."); }
     event.target.value = ''; 
@@ -511,7 +507,8 @@ async function loadZipProfile(file) {
 
 async function exportData() {
     const btn = document.getElementById('btn-export');
-    const originalText = btn.innerHTML; btn.innerHTML = '⏳ Preparazione...'; btn.disabled = true;
+    const originalText = "💾 Backup"; 
+    btn.innerHTML = '⏳ Preparazione...'; btn.disabled = true;
 
     try {
         const zip = new JSZip(); const imgFolder = zip.folder("images");
@@ -542,7 +539,7 @@ async function exportData() {
         let safeTitle = gardenTitle.replace('🌿', '').trim().replace(/[^a-zA-Z0-9 àèìòùÀÈÌÒÙ-]/g, '').replace(/\s+/g, '-');
         if (!safeTitle) safeTitle = "Giardino"; a.download = `${safeTitle}-${dateStr}-${timeStr}.zip`; a.click();
         unsavedChanges = false;
-    } catch(err) { alert("Errore durante la creazione del file ZIP: " + err); } finally { btn.innerHTML = originalText; btn.disabled = false; }
+    } catch(err) { alert("Errore durante la creazione del file ZIP: " + err); } finally { btn.innerHTML = "💾 Esporta dati"; btn.disabled = false; }
 }
 
 function exportToCSV() {
@@ -558,7 +555,7 @@ function exportToCSV() {
         "Stato", "Ultima Altezza (cm)", "Ultimo pH Misurato", "Cronologia Eventi"
     ];
 
-    let csvContent = headers.join(",") + "\n";
+    let csvContent = headers.join(";") + "\n"; 
 
     plantsDatabase.forEach(p => {
         let latestHeight = "";
@@ -594,12 +591,14 @@ function exportToCSV() {
                 
                 let noteStr = l.note ? ` - ${l.note}` : "";
                 return `[${l.date}] ${l.type}${detail}${noteStr}`;
-            }).join(" | ");
+            }).join("\n"); 
         }
+
+        let safePotSize = p.potSize || p.pot || "";
 
         let row = [
             p.name, p.scientific, p.origin, motherName, fatherName, p.sowingDate,
-            p.geneticFidelity, p.placement, p.potSize, p.soil, p.phTerreno,
+            p.geneticFidelity, p.placement, safePotSize, p.soil, p.phTerreno,
             p.minTemp, p.vendor, p.location, p.lat, p.lng,
             p.status === 'archived' ? 'Archiviata' : 'Attiva',
             latestHeight, latestPh, eventsStr
@@ -607,11 +606,11 @@ function exportToCSV() {
 
         let formattedRow = row.map(field => {
             let val = field === null || field === undefined ? "" : String(field);
-            if (val.search(/("|,|\n)/g) >= 0) {
+            if (val.search(/("|,|;|\n)/g) >= 0) {
                 val = `"${val.replace(/"/g, '""')}"`;
             }
             return val;
-        }).join(",");
+        }).join(";");
 
         csvContent += formattedRow + "\n";
     });
@@ -624,7 +623,8 @@ function exportToCSV() {
     
     const now = new Date();
     const dateStr = now.toISOString().slice(0, 10);
-    link.setAttribute("download", `Inventario_Piante_${dateStr}.csv`);
+    let safeTitle = gardenTitle.replace('🌿', '').trim().replace(/[^a-zA-Z0-9]/g, '_');
+    link.setAttribute("download", `Inventario_Piante_${safeTitle}_${dateStr}.csv`);
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -745,6 +745,7 @@ function confirmDuplicate() {
 function closePlantForm() {
     document.getElementById('form-container').classList.add('hidden'); 
     clearForm();
+    editingMode = false;
     if (currentPlantId) { 
         openPlantDetail(currentPlantId);
     } else { 
@@ -876,7 +877,6 @@ function renderPlants() {
         let sistemazioneLabel = plant.placement || 'Vaso'; let vol = plant.potSize || plant.pot; if (sistemazioneLabel === 'Vaso' && vol) sistemazioneLabel += ` (${escapeHTML(vol)} L)`;
         let origLabel = plant.origin || plant.type || 'Non so / Altro';
         
-        // Nuovi Badge
         let tempBadge = plant.minTemp !== undefined && plant.minTemp !== "" ? `<span style="background:#e3f2fd; color:#1565c0; padding:2px 6px; border-radius:4px; font-size:12px; margin-left:5px; font-weight:bold;">❄️ Min: ${plant.minTemp}°C</span>` : '';
         let phBadge = plant.phTerreno !== undefined && plant.phTerreno !== "" ? `<span style="background:#e8f5e9; color:#2e7d32; padding:2px 6px; border-radius:4px; font-size:12px; margin-left:5px; font-weight:bold;">🧪 pH: ${plant.phTerreno}</span>` : '';
 
