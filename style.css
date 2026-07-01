@@ -288,27 +288,31 @@ input:focus, select:focus, textarea:focus { border-color: var(--primary); outlin
 /* --- REGOLE DI SISTEMA E TOAST --- */
 .hidden { display: none !important; }
 
+/* STILE MIGLIORATO PER IL POPUP DI SALVATAGGIO AUTOMATICO (Bollino rotondo) */
 #autosave-toast {
     position: fixed;
-    bottom: 20px;
-    right: 20px;
+    bottom: 25px;
+    right: 25px;
     background-color: var(--primary);
     color: white;
-    padding: 12px 24px;
-    border-radius: 30px;
-    box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.3);
     z-index: 9999;
-    font-weight: bold;
-    font-size: 14px;
+    font-size: 22px;
     opacity: 1;
     transition: opacity 0.5s ease-in-out, transform 0.5s ease-in-out;
-    transform: translateY(0);
+    transform: translateY(0) scale(1);
 }
 
 #autosave-toast.hidden {
-    display: block !important; 
+    display: flex !important; /* Importante per mantenere la forma del cerchio mentre scompare */
     opacity: 0;
-    transform: translateY(20px);
+    transform: translateY(20px) scale(0.8);
     pointer-events: none;
 }
 

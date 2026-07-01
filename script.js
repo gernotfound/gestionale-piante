@@ -200,11 +200,30 @@ function logout() {
 
 // GESTIONE FILTRI E GELO
 function setQuickFilter(filterType, btnElement) {
+    if (filterType === 'gelo') {
+        let tempInput = prompt("❄️ ALLARME GELO\nInserisci la temperatura minima prevista stanotte (es. 3):\n\nIl sistema ti mostrerà in automatico le piante in pericolo (cioè quelle che richiedono una temperatura minima uguale o superiore a quella che inserisci).", "0");
+        
+        if (tempInput === null || tempInput.trim() === "") {
+            return; 
+        }
+        
+        let parsedTemp = parseFloat(tempInput);
+        if (isNaN(parsedTemp)) {
+            alert("Per favore, inserisci un numero valido.");
+            return;
+        }
+        
+        frostThreshold = parsedTemp;
+        btnElement.innerText = `❄️ Gelo (Previsti ${frostThreshold}°C)`;
+    } else {
+        const geloBtn = document.querySelector('.filter-chip.gelo');
+        if(geloBtn) geloBtn.innerText = "❄️ Gelo";
+    }
+
     currentQuickFilter = filterType;
     document.querySelectorAll('.filter-chip').forEach(btn => btn.classList.remove('active'));
     btnElement.classList.add('active');
     
-    // Mostra/Nascondi il box dell'allarme gelo
     const frostBox = document.getElementById('frost-emergency-box');
     if (filterType === 'gelo') {
         frostBox.classList.remove('hidden');
@@ -391,7 +410,7 @@ function showMapPlantsList(plantsList) {
             <img src="${imgSrc}">
             <h3 style="margin-bottom:5px; margin-top:0;">${escapeHTML(plant.name)}</h3>
             <p style="margin-top:0; font-size:14px;"><em>${escapeHTML(plant.scientific)}</em></p>
-            <p style="margin:5px 0;">🪴 Sistemazione: <strong>${sistemazioneLabel}</strong></p>
+            <p style="margin:5px 0;">🪴 <strong>${sistemazioneLabel}</strong></p>
         `;
         container.appendChild(card);
     });
@@ -444,7 +463,7 @@ function renderGlobalChart() {
     globalEvChart = new Chart(ctx, { type: 'scatter', data: { datasets: [ { label: '🌸 Fioriture', data: fioriture, backgroundColor: '#f06292', pointRadius: 8, pointHoverRadius: 12 }, { label: '🍋/🧺 Raccolti e Frutti', data: raccolti, backgroundColor: '#f57f17', pointRadius: 8, pointHoverRadius: 12 } ] }, options: { responsive: true, maintainAspectRatio: false, plugins: { tooltip: { callbacks: { label: function(context) { return `${context.raw.y}: ${context.raw.note || context.raw.x}`; } } } }, scales: { x: { type: 'category', labels: dateLabels, title: { display: true, text: 'Data' } }, y: { type: 'category', labels: plantLabels } } } });
 }
 
-// --- IMPORT E EXPORT ZIP ---
+// --- IMPORT E EXPORT (ZIP E CSV) ---
 function loadProfile(event) {
     const file = event.target.files[0];
     if (!file) return;
@@ -524,6 +543,91 @@ async function exportData() {
         if (!safeTitle) safeTitle = "Giardino"; a.download = `${safeTitle}-${dateStr}-${timeStr}.zip`; a.click();
         unsavedChanges = false;
     } catch(err) { alert("Errore durante la creazione del file ZIP: " + err); } finally { btn.innerHTML = originalText; btn.disabled = false; }
+}
+
+function exportToCSV() {
+    if (plantsDatabase.length === 0) {
+        alert("Nessuna pianta da esportare!");
+        return;
+    }
+
+    const headers = [
+        "Nome", "Nome Scientifico", "Origine/Propagazione", "Madre", "Padre", "Data Semina/Inizio",
+        "Fedeltà Varietale", "Sistemazione", "Litri Vaso", "Substrato", "pH Terreno",
+        "Temp. Minima", "Fornitore", "Luogo", "Latitudine", "Longitudine",
+        "Stato", "Ultima Altezza (cm)", "Ultimo pH Misurato", "Cronologia Eventi"
+    ];
+
+    let csvContent = headers.join(",") + "\n";
+
+    plantsDatabase.forEach(p => {
+        let latestHeight = "";
+        let heightLogs = p.logs.filter(l => l.type === 'Misurazione' && l.height).sort((a, b) => new Date(b.date) - new Date(a.date));
+        if (heightLogs.length > 0) latestHeight = heightLogs[0].height;
+
+        let latestPh = "";
+        let phLogs = p.logs.filter(l => l.type === 'Misurazione pH' && l.ph).sort((a, b) => new Date(b.date) - new Date(a.date));
+        if (phLogs.length > 0) latestPh = phLogs[0].ph;
+
+        let motherName = "";
+        if (p.mother) {
+            let m = plantsDatabase.find(x => x.id == p.mother);
+            if (m) motherName = m.name;
+        }
+
+        let fatherName = "";
+        if (p.father) {
+            let f = plantsDatabase.find(x => x.id == p.father);
+            if (f) fatherName = f.name;
+        }
+
+        let eventsStr = "";
+        if (p.logs && p.logs.length > 0) {
+            let sortedLogs = [...p.logs].sort((a, b) => new Date(a.date) - new Date(b.date));
+            eventsStr = sortedLogs.map(l => {
+                let detail = "";
+                if (l.type === 'Misurazione' && l.height) detail = ` (${l.height}cm)`;
+                else if (l.type === 'Misurazione pH' && l.ph) detail = ` (pH ${l.ph})`;
+                else if (l.type === 'Raccolto' && l.harvest) detail = ` (Resa: ${l.harvest})`;
+                else if (l.type === 'Rinvaso / Sistemazione' && l.placement) detail = ` (${l.placement} ${l.potSize ? l.potSize+'L' : ''})`;
+                else if (l.type === 'Innesto' && l.graftName) detail = ` (Nuovo nome: ${l.graftName})`;
+                
+                let noteStr = l.note ? ` - ${l.note}` : "";
+                return `[${l.date}] ${l.type}${detail}${noteStr}`;
+            }).join(" | ");
+        }
+
+        let row = [
+            p.name, p.scientific, p.origin, motherName, fatherName, p.sowingDate,
+            p.geneticFidelity, p.placement, p.potSize, p.soil, p.phTerreno,
+            p.minTemp, p.vendor, p.location, p.lat, p.lng,
+            p.status === 'archived' ? 'Archiviata' : 'Attiva',
+            latestHeight, latestPh, eventsStr
+        ];
+
+        let formattedRow = row.map(field => {
+            let val = field === null || field === undefined ? "" : String(field);
+            if (val.search(/("|,|\n)/g) >= 0) {
+                val = `"${val.replace(/"/g, '""')}"`;
+            }
+            return val;
+        }).join(",");
+
+        csvContent += formattedRow + "\n";
+    });
+
+    const bom = "\uFEFF"; 
+    const blob = new Blob([bom + csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement("a");
+    const url = URL.createObjectURL(blob);
+    link.setAttribute("href", url);
+    
+    const now = new Date();
+    const dateStr = now.toISOString().slice(0, 10);
+    link.setAttribute("download", `Inventario_Piante_${dateStr}.csv`);
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
 }
 
 // --- GESTIONE FORM PIANTA ---
@@ -630,7 +734,7 @@ function confirmDuplicate() {
         let clonedLogs = [];
         if (plantToCopy.logs && plantToCopy.logs.length > 0) { clonedLogs = JSON.parse(JSON.stringify(plantToCopy.logs)); clonedLogs.forEach(log => { log.id = Date.now() + Math.floor(Math.random() * 1000000); }); }
         const newPlant = {
-            id: Date.now() + i + Math.floor(Math.random() * 10000), name: newName, scientific: plantToCopy.scientific, origin: plantToCopy.origin, sowingDate: plantToCopy.sowingDate, geneticFidelity: plantToCopy.geneticFidelity, placement: plantToCopy.placement, potSize: plantToCopy.potSize, soil: plantToCopy.soil, vendor: plantToCopy.vendor, location: plantToCopy.location, notes: plantToCopy.notes, lat: plantToCopy.lat, lng: plantToCopy.lng, photo: plantToCopy.photo, fruitPhoto: plantToCopy.fruitPhoto, status: 'active', logs: clonedLogs, mother: plantToCopy.mother, father: plantToCopy.father, minTemp: plantToCopy.minTemp          
+            id: Date.now() + i + Math.floor(Math.random() * 10000), name: newName, scientific: plantToCopy.scientific, origin: plantToCopy.origin, sowingDate: plantToCopy.sowingDate, geneticFidelity: plantToCopy.geneticFidelity, placement: plantToCopy.placement, potSize: plantToCopy.potSize, soil: plantToCopy.soil, phTerreno: plantToCopy.phTerreno, vendor: plantToCopy.vendor, location: plantToCopy.location, notes: plantToCopy.notes, lat: plantToCopy.lat, lng: plantToCopy.lng, photo: plantToCopy.photo, fruitPhoto: plantToCopy.fruitPhoto, status: 'active', logs: clonedLogs, mother: plantToCopy.mother, father: plantToCopy.father, minTemp: plantToCopy.minTemp          
         };
         plantsDatabase.push(newPlant);
     }
@@ -672,6 +776,7 @@ async function savePlant() {
     
     let finalVendor = vendorMode === 'select' ? document.getElementById('p-vendor-select').value : document.getElementById('p-vendor-input').value.trim();
     let finalSoil = soilMode === 'select' ? document.getElementById('p-soil-select').value : document.getElementById('p-soil-input').value.trim();
+    let phTerreno = document.getElementById('p-ph') ? document.getElementById('p-ph').value.trim() : "";
     let finalMainPhoto = ""; let finalFruitPhoto = "";
 
     const mainInput = document.getElementById('p-photo');
@@ -682,11 +787,11 @@ async function savePlant() {
 
     if (editingMode && currentPlantId) {
         let index = plantsDatabase.findIndex(p => p.id === currentPlantId);
-        plantsDatabase[index].name = newName; plantsDatabase[index].scientific = document.getElementById('p-scientific').value.trim(); plantsDatabase[index].origin = document.getElementById('p-origin').value; plantsDatabase[index].sowingDate = document.getElementById('p-sowing-date').value; plantsDatabase[index].geneticFidelity = document.getElementById('p-genetic-fidelity').value; plantsDatabase[index].soil = finalSoil; plantsDatabase[index].vendor = finalVendor; plantsDatabase[index].location = document.getElementById('p-location').value.trim(); plantsDatabase[index].notes = document.getElementById('p-notes').value.trim(); plantsDatabase[index].lat = document.getElementById('p-lat').value.trim(); plantsDatabase[index].lng = document.getElementById('p-lng').value.trim(); plantsDatabase[index].photo = finalMainPhoto; plantsDatabase[index].fruitPhoto = finalFruitPhoto; 
+        plantsDatabase[index].name = newName; plantsDatabase[index].scientific = document.getElementById('p-scientific').value.trim(); plantsDatabase[index].origin = document.getElementById('p-origin').value; plantsDatabase[index].sowingDate = document.getElementById('p-sowing-date').value; plantsDatabase[index].geneticFidelity = document.getElementById('p-genetic-fidelity').value; plantsDatabase[index].soil = finalSoil; plantsDatabase[index].phTerreno = phTerreno; plantsDatabase[index].vendor = finalVendor; plantsDatabase[index].location = document.getElementById('p-location').value.trim(); plantsDatabase[index].notes = document.getElementById('p-notes').value.trim(); plantsDatabase[index].lat = document.getElementById('p-lat').value.trim(); plantsDatabase[index].lng = document.getElementById('p-lng').value.trim(); plantsDatabase[index].photo = finalMainPhoto; plantsDatabase[index].fruitPhoto = finalFruitPhoto; 
         plantsDatabase[index].mother = document.getElementById('p-mother').value; plantsDatabase[index].father = document.getElementById('p-father').value; plantsDatabase[index].minTemp = document.getElementById('p-min-temp').value;
     } else {
         const plantData = {
-            id: Date.now(), name: newName, scientific: document.getElementById('p-scientific').value.trim(), origin: document.getElementById('p-origin').value, sowingDate: document.getElementById('p-sowing-date').value, geneticFidelity: document.getElementById('p-genetic-fidelity').value, placement: document.getElementById('p-placement').value, potSize: document.getElementById('p-pot-size').value.trim(), soil: finalSoil, vendor: finalVendor, location: document.getElementById('p-location').value.trim(), notes: document.getElementById('p-notes').value.trim(), lat: document.getElementById('p-lat').value.trim(), lng: document.getElementById('p-lng').value.trim(), photo: finalMainPhoto, fruitPhoto: finalFruitPhoto, status: 'active', logs: [],
+            id: Date.now(), name: newName, scientific: document.getElementById('p-scientific').value.trim(), origin: document.getElementById('p-origin').value, sowingDate: document.getElementById('p-sowing-date').value, geneticFidelity: document.getElementById('p-genetic-fidelity').value, placement: document.getElementById('p-placement').value, potSize: document.getElementById('p-pot-size').value.trim(), soil: finalSoil, phTerreno: phTerreno, vendor: finalVendor, location: document.getElementById('p-location').value.trim(), notes: document.getElementById('p-notes').value.trim(), lat: document.getElementById('p-lat').value.trim(), lng: document.getElementById('p-lng').value.trim(), photo: finalMainPhoto, fruitPhoto: finalFruitPhoto, status: 'active', logs: [],
             mother: document.getElementById('p-mother').value, father: document.getElementById('p-father').value, minTemp: document.getElementById('p-min-temp').value
         };
         plantsDatabase.push(plantData);
@@ -714,9 +819,9 @@ function renderPlants() {
         else if (currentQuickFilter === 'seme') filteredPlants = filteredPlants.filter(p => p.origin === 'Da seme' || p.type === 'Pianta da seme');
         else if (currentQuickFilter === 'innesto') filteredPlants = filteredPlants.filter(p => p.origin === 'Innesto' || p.type === 'Pianta innestata');
         else if (currentQuickFilter === 'gelo') {
-            let frostThreshold = parseFloat(document.getElementById('frost-temp-input').value);
-            if(isNaN(frostThreshold)) frostThreshold = 5; // Protezione se l'utente svuota la casella
-            filteredPlants = filteredPlants.filter(p => p.minTemp !== undefined && p.minTemp !== "" && parseFloat(p.minTemp) >= frostThreshold);
+            let frostThresholdVal = parseFloat(document.getElementById('frost-temp-input').value);
+            if(isNaN(frostThresholdVal)) frostThresholdVal = 5; 
+            filteredPlants = filteredPlants.filter(p => p.minTemp !== undefined && p.minTemp !== "" && parseFloat(p.minTemp) >= frostThresholdVal);
         }
     }
 
@@ -734,6 +839,14 @@ function renderPlants() {
             let lastB = b.id;
             if (b.logs && b.logs.length > 0) { lastB = Math.max(...b.logs.map(l => new Date(l.date).getTime() || 0)); }
             return lastB - lastA; 
+        } else if (sortMode === 'temp_desc') {
+            let tempA = (a.minTemp !== undefined && a.minTemp !== "") ? parseFloat(a.minTemp) : -999;
+            let tempB = (b.minTemp !== undefined && b.minTemp !== "") ? parseFloat(b.minTemp) : -999;
+            return tempB - tempA;
+        } else if (sortMode === 'ph_desc') {
+            let phA = (a.phTerreno !== undefined && a.phTerreno !== "") ? parseFloat(a.phTerreno) : -999;
+            let phB = (b.phTerreno !== undefined && b.phTerreno !== "") ? parseFloat(b.phTerreno) : -999;
+            return phB - phA;
         }
         return 0;
     });
@@ -762,15 +875,18 @@ function renderPlants() {
 
         let sistemazioneLabel = plant.placement || 'Vaso'; let vol = plant.potSize || plant.pot; if (sistemazioneLabel === 'Vaso' && vol) sistemazioneLabel += ` (${escapeHTML(vol)} L)`;
         let origLabel = plant.origin || plant.type || 'Non so / Altro';
+        
+        // Nuovi Badge
         let tempBadge = plant.minTemp !== undefined && plant.minTemp !== "" ? `<span style="background:#e3f2fd; color:#1565c0; padding:2px 6px; border-radius:4px; font-size:12px; margin-left:5px; font-weight:bold;">❄️ Min: ${plant.minTemp}°C</span>` : '';
+        let phBadge = plant.phTerreno !== undefined && plant.phTerreno !== "" ? `<span style="background:#e8f5e9; color:#2e7d32; padding:2px 6px; border-radius:4px; font-size:12px; margin-left:5px; font-weight:bold;">🧪 pH: ${plant.phTerreno}</span>` : '';
 
         card.innerHTML = `
             <img src="${imgSrc}">
-            <div style="margin-bottom:10px;"><span class="timeline-type" style="margin-left:0;">${escapeHTML(origLabel)}</span>${tempBadge}</div>
+            <div style="margin-bottom:10px;"><span class="timeline-type" style="margin-left:0;">${escapeHTML(origLabel)}</span>${tempBadge}${phBadge}</div>
             <h3 style="margin-bottom:5px; margin-top:0;">${escapeHTML(plant.name)}</h3>
             <p style="margin-top:0; font-size:14px;"><em>${escapeHTML(plant.scientific)}</em></p>
             <p style="margin:5px 0;">📍 ${escapeHTML(plant.location) || 'Posizione non specificata'}</p>
-            <p style="margin:5px 0;">🪴 Sistemazione: <strong>${sistemazioneLabel}</strong></p>
+            <p style="margin:5px 0;">🪴 <strong>${sistemazioneLabel}</strong></p>
         `;
         grid.appendChild(card);
     });
@@ -816,7 +932,7 @@ function openPlantDetail(id) {
         ${parentStr}
         <p style="margin-top:0;"><strong>📅 Data semina/inizio:</strong> ${formatDateIt(plant.sowingDate)}</p>
         <p><strong>🪴 Sistemazione:</strong> ${sistemazioneLabel}</p>
-        <p><strong>🪨 Substrato:</strong> ${escapeHTML(plant.soil) || 'N/D'}</p>
+        <p><strong>🪨 Substrato:</strong> ${escapeHTML(plant.soil) || 'N/D'} ${plant.phTerreno ? `| <strong>pH:</strong> ${escapeHTML(plant.phTerreno)}` : ''}</p>
         <p><strong>🌱 Origine:</strong> ${escapeHTML(origLabel)} | <strong>🛒 Fornitore:</strong> ${renderFornitore(plant.vendor)}</p>
         <p><strong>📍 Luogo:</strong> ${escapeHTML(plant.location) || 'N/D'} ${tempStr ? '<br>'+tempStr : ''}</p>
         <hr style="border:0.5px solid #ddd; margin:10px 0;">
@@ -881,6 +997,7 @@ function editCurrentPlant() {
 
     if(plant.vendor) { setVendorMode('select'); document.getElementById('p-vendor-select').value = plant.vendor; document.getElementById('p-vendor-input').value = plant.vendor; } else { setVendorMode('select'); }
     if(plant.soil) { setSoilMode('select'); document.getElementById('p-soil-select').value = plant.soil; document.getElementById('p-soil-input').value = plant.soil; } else { setSoilMode('select'); }
+    document.getElementById('p-ph').value = plant.phTerreno || '';
     document.getElementById('p-location').value = plant.location || ''; document.getElementById('p-notes').value = plant.notes || ''; document.getElementById('p-lat').value = plant.lat || ''; document.getElementById('p-lng').value = plant.lng || '';
     
     document.getElementById('plant-detail-view').classList.add('hidden'); document.getElementById('dashboard').classList.remove('hidden'); document.getElementById('dashboard-controls').classList.add('hidden'); document.getElementById('frost-emergency-box').classList.add('hidden'); document.getElementById('dashboard-stats').classList.add('hidden'); document.getElementById('global-stats-view').classList.add('hidden'); document.getElementById('global-map-page').classList.add('hidden'); document.getElementById('plants-grid').classList.add('hidden'); document.getElementById('form-title').innerText = "Modifica dettagli pianta"; document.getElementById('form-container').classList.remove('hidden');
