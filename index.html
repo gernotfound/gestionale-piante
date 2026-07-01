@@ -561,24 +561,20 @@
     </div>
 </div>
 
-<!-- Registrazione Service Worker per PWA -->
+<!-- SCRIPT "SPAZZINO" DEFINITIVO (Risolve la pagina bianca su GitHub) -->
 <script>
     if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-            navigator.serviceWorker.register('sw.js').then(registration => {
-                console.log('PWA ServiceWorker registrato.');
-                registration.addEventListener('updatefound', () => {
-                    const newWorker = registration.installing;
-                    newWorker.addEventListener('statechange', () => {
-                        if (newWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                            console.log('Nuovo aggiornamento disponibile!');
-                            window.location.reload(); 
-                        }
-                    });
-                });
-            }).catch(error => {
-                console.log('Registrazione PWA fallita:', error);
-            });
+        navigator.serviceWorker.getRegistrations().then(function(registrations) {
+            for(let registration of registrations) {
+                registration.unregister();
+                console.log('Service Worker bloccato eliminato.');
+            }
+        });
+        caches.keys().then(function(names) {
+            for (let name of names) {
+                caches.delete(name);
+                console.log('Cache corrotta eliminata:', name);
+            }
         });
     }
 </script>
