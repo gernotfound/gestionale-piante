@@ -570,9 +570,10 @@ function exportToCSV() {
         return;
     }
 
+    // AGGIORNATO: L'intestazione per il file Excel ora mostra "pH ottimale"
     const headers = [
         "Nome", "Nome Scientifico", "Origine/Propagazione", "Madre", "Padre", "Data Semina/Inizio",
-        "Fedeltà Varietale", "Sistemazione", "Litri Vaso", "Substrato", "pH Terreno",
+        "Fedeltà Varietale", "Sistemazione", "Litri Vaso", "Substrato", "pH ottimale",
         "Temp. Minima", "Fornitore", "Luogo", "Latitudine", "Longitudine",
         "Stato", "Ultima Altezza (cm)", "Ultimo pH Misurato", "Cronologia Eventi"
     ];

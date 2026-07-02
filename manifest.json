@@ -1,6 +1,6 @@
 {
-  "name": "Gestione Piante Tropicali - Pro",
-  "short_name": "Piante Pro",
+  "name": "Pianta",
+  "short_name": "Pianta",
   "description": "App gestionale per collezionisti di piante tropicali.",
   "start_url": "./",
   "display": "standalone",

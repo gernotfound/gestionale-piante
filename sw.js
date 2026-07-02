@@ -1,4 +1,4 @@
-const CACHE_NAME = 'piante-pro-cache-v3';
+const CACHE_NAME = 'piante-pro-cache-v4';
 
 // Elenco di tutti i file necessari per far funzionare l'app OFFLINE 100%
 const urlsToCache = [
@@ -48,7 +48,12 @@ self.addEventListener('activate', event => {
 self.addEventListener('fetch', event => {
     const req = event.request;
     
-    // Strategia "Network First": Cerca prima su internet (per avere gli ultimi aggiornamenti di GitHub)
+    // Sicurezza: intercetta solo le richieste web standard, evita bug con estensioni browser
+    if (!(req.url.startsWith('http:') || req.url.startsWith('https:'))) {
+        return;
+    }
+    
+    // Strategia "Network First": Cerca prima su internet
     // Se non c'è internet (offline), pesca la versione salvata nella cache.
     event.respondWith(
         fetch(req).then(networkResponse => {

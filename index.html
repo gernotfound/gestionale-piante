@@ -196,6 +196,12 @@
                     </div>
                 </div>
 
+                <!-- CAMPO pH SPOSTATO QUI -->
+                <div>
+                    <label>pH ottimale:</label>
+                    <input type="number" id="p-ph" step="0.1" min="0" max="14" placeholder="es. 6.5">
+                </div>
+
                 <!-- SEZIONE 3: Ambiente e posizione -->
                 <h3 class="form-section-title">🌍 Ambiente e posizione</h3>
                 
@@ -223,10 +229,7 @@
                     </div>
                 </div>
 
-                <div>
-                    <label>pH Terreno:</label>
-                    <input type="number" id="p-ph" step="0.1" min="0" max="14" placeholder="es. 6.5">
-                </div>
+                <!-- Il pH non è più qui -->
 
                 <div>
                     <label>Temp. minima tollerata (°C):</label>
@@ -561,20 +564,13 @@
     </div>
 </div>
 
-<!-- SCRIPT "SPAZZINO" DEFINITIVO (Risolve la pagina bianca su GitHub) -->
+<!-- REGISTRAZIONE SERVICE WORKER (Per il funzionamento Offline) -->
 <script>
     if ('serviceWorker' in navigator) {
-        navigator.serviceWorker.getRegistrations().then(function(registrations) {
-            for(let registration of registrations) {
-                registration.unregister();
-                console.log('Service Worker bloccato eliminato.');
-            }
-        });
-        caches.keys().then(function(names) {
-            for (let name of names) {
-                caches.delete(name);
-                console.log('Cache corrotta eliminata:', name);
-            }
+        window.addEventListener('load', () => {
+            navigator.serviceWorker.register('./sw.js')
+                .then(reg => console.log('Service Worker registrato con successo! L\'app funzionerà offline.', reg))
+                .catch(err => console.error('Errore nella registrazione del Service Worker:', err));
         });
     }
 </script>
