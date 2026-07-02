@@ -12,13 +12,11 @@ let editingMode = false;
 let unsavedChanges = false;
 let currentQuickFilter = 'all';
 let frostThreshold = 5;
-let previousView = 'dashboard'; // Memoria per tornare alla Mappa o alla Dashboard
+let previousView = 'dashboard'; 
 
-// Variabili per la Mappa Globale
 let globalMap = null;
 let globalMapMarkers = null;
 
-// Variabili Batch
 let isBatchMode = false;
 let selectedBatchPlants = new Set();
 
@@ -187,18 +185,15 @@ function startNewProfile() {
     saveToLocal(); 
 }
 
-// LOGOUT DEFINITIVO (Svuota IndexedDB per permettere nuovi caricamenti)
 async function logout() {
     if(confirm("Vuoi davvero uscire dal giardino? Assicurati di aver esportato il Backup se devi spostare i dati su un altro PC.")) {
         if(isBatchMode) toggleBatchMode(); 
         
-        // Svuota la memoria RAM
         plantsDatabase = [];
         gardenTitle = "🌿 Gestione Piante Tropicali - Pro";
         gardenNotes = "";
         unsavedChanges = false;
 
-        // Elimina il salvataggio automatico da IndexedDB
         try {
             let db = await initDB();
             let tx = db.transaction(STORE_NAME, 'readwrite');
@@ -208,7 +203,6 @@ async function logout() {
             console.error("Errore durante la cancellazione del DB:", e);
         }
 
-        // Nascondi la UI
         document.getElementById('dashboard').classList.add('hidden');
         document.getElementById('my-data-page').classList.add('hidden');
         document.getElementById('archive-page').classList.add('hidden');
@@ -217,12 +211,10 @@ async function logout() {
         document.getElementById('form-container').classList.add('hidden');
         document.getElementById('frost-emergency-box').classList.add('hidden');
         
-        // Torna alla Home in modo pulito
         document.getElementById('startup-screen').classList.remove('hidden');
     }
 }
 
-// GESTIONE FILTRI E GELO (Niente Prompt)
 function setQuickFilter(filterType, btnElement) {
     currentQuickFilter = filterType;
     document.querySelectorAll('.filter-chip').forEach(btn => btn.classList.remove('active'));
@@ -404,7 +396,6 @@ function showMapPlantsList(plantsList) {
     plantsList.forEach(plant => {
         const card = document.createElement('div');
         card.className = 'plant-card';
-        // Memorizza che siamo entrati dalla Mappa!
         card.onclick = () => { previousView = 'map'; closeGlobalMapView(); openPlantDetail(plant.id); };
         
         let imgSrc = plant.fruitPhoto || plant.photo || 'https://via.placeholder.com/300x200?text=Nessuna+Foto';
@@ -455,7 +446,7 @@ function toggleGlobalStats() {
 
 function renderGlobalChart() {
     const ctx = document.getElementById('globalEventsChart').getContext('2d');
-    if(globalEvChart) globalEvChart.destroy();
+    if(globalEvChart) { globalEvChart.destroy(); globalEvChart = null; }
     let allEvents = [];
     plantsDatabase.forEach(plant => {
         if(plant.logs) {
@@ -529,7 +520,6 @@ async function loadZipProfile(file) {
 
 async function exportData() {
     const btn = document.getElementById('btn-export');
-    const originalText = "💾 Backup"; 
     btn.innerHTML = '⏳ Preparazione...'; btn.disabled = true;
 
     try {
@@ -561,7 +551,7 @@ async function exportData() {
         let safeTitle = gardenTitle.replace('🌿', '').trim().replace(/[^a-zA-Z0-9 àèìòùÀÈÌÒÙ-]/g, '').replace(/\s+/g, '-');
         if (!safeTitle) safeTitle = "Giardino"; a.download = `${safeTitle}-${dateStr}-${timeStr}.zip`; a.click();
         unsavedChanges = false;
-    } catch(err) { alert("Errore durante la creazione del file ZIP: " + err); } finally { btn.innerHTML = "💾 Esporta dati"; btn.disabled = false; }
+    } catch(err) { alert("Errore durante la creazione del file ZIP: " + err); } finally { btn.innerHTML = "💾 Backup"; btn.disabled = false; }
 }
 
 function exportToCSV() {
@@ -570,7 +560,6 @@ function exportToCSV() {
         return;
     }
 
-    // AGGIORNATO: L'intestazione per il file Excel ora mostra "pH ottimale"
     const headers = [
         "Nome", "Nome Scientifico", "Origine/Propagazione", "Madre", "Padre", "Data Semina/Inizio",
         "Fedeltà Varietale", "Sistemazione", "Litri Vaso", "Substrato", "pH ottimale",
@@ -906,7 +895,7 @@ function renderPlants() {
         
         // Nuovi Badge
         let tempBadge = plant.minTemp !== undefined && plant.minTemp !== "" ? `<span style="background:#e3f2fd; color:#1565c0; padding:2px 6px; border-radius:4px; font-size:12px; margin-left:5px; font-weight:bold;">❄️ Min: ${plant.minTemp}°C</span>` : '';
-        let phBadge = plant.phTerreno !== undefined && plant.phTerreno !== "" ? `<span style="background:#e8f5e9; color:#2e7d32; padding:2px 6px; border-radius:4px; font-size:12px; margin-left:5px; font-weight:bold;">🧪 pH: ${plant.phTerreno}</span>` : '';
+        let phBadge = plant.phTerreno !== undefined && plant.phTerreno !== "" ? `<span style="background:#e8f5e9; color:#2e7d32; padding:2px 6px; border-radius:4px; font-size:12px; margin-left:5px; font-weight:bold;">🧪 pH ottimale: ${plant.phTerreno}</span>` : '';
 
         card.innerHTML = `
             <img src="${imgSrc}">
@@ -956,11 +945,12 @@ function openPlantDetail(id) {
 
     let tempStr = plant.minTemp !== undefined && plant.minTemp !== "" ? `<span style="color: #1976d2; font-weight:bold;">❄️ Minima tollerata: ${plant.minTemp}°C</span>` : '';
 
+    // AGGIORNATO: Corretta l'etichetta visiva per mostrare "pH ottimale"
     document.getElementById('detail-info').innerHTML = `
         ${parentStr}
         <p style="margin-top:0;"><strong>📅 Data semina/inizio:</strong> ${formatDateIt(plant.sowingDate)}</p>
         <p><strong>🪴 Sistemazione:</strong> ${sistemazioneLabel}</p>
-        <p><strong>🪨 Substrato:</strong> ${escapeHTML(plant.soil) || 'N/D'} ${plant.phTerreno ? `| <strong>pH:</strong> ${escapeHTML(plant.phTerreno)}` : ''}</p>
+        <p><strong>🪨 Substrato:</strong> ${escapeHTML(plant.soil) || 'N/D'} ${plant.phTerreno ? `| <strong>pH ottimale:</strong> ${escapeHTML(plant.phTerreno)}` : ''}</p>
         <p><strong>🌱 Origine:</strong> ${escapeHTML(origLabel)} | <strong>🛒 Fornitore:</strong> ${renderFornitore(plant.vendor)}</p>
         <p><strong>📍 Luogo:</strong> ${escapeHTML(plant.location) || 'N/D'} ${tempStr ? '<br>'+tempStr : ''}</p>
         <hr style="border:0.5px solid #ddd; margin:10px 0;">
@@ -1090,7 +1080,7 @@ function renderTimeline(plant) {
     const sortedLogs = [...plant.logs].sort((a,b) => new Date(b.date) - new Date(a.date));
     sortedLogs.forEach(log => {
         const li = document.createElement('li');
-        let heightStr = (log.type === 'Misurazione' && log.height !== null && log.height !== undefined) ? `<br>📏 <strong>Altezza:</strong> ${log.height} cm` : ''; let phStr = (log.type === 'Misurazione pH' && log.ph !== null && log.ph !== undefined) ? `<br>🧪 <strong>pH:</strong> ${log.ph}` : ''; let harvestStr = (log.type === 'Raccolto' && log.harvest) ? `<br>🧺 <strong>Resa:</strong> ${escapeHTML(log.harvest)}` : '';
+        let heightStr = (log.type === 'Misurazione' && log.height !== null && log.height !== undefined) ? `<br>📏 <strong>Altezza:</strong> ${log.height} cm` : ''; let phStr = (log.type === 'Misurazione pH' && log.ph !== null && log.ph !== undefined) ? `<br>🧪 <strong>pH misurato:</strong> ${log.ph}` : ''; let harvestStr = (log.type === 'Raccolto' && log.harvest) ? `<br>🧺 <strong>Resa:</strong> ${escapeHTML(log.harvest)}` : '';
         let repotStr = ''; if (log.type === 'Rinvaso / Sistemazione' && log.placement) { repotStr = `<br>🪴 <strong>Nuova sistemazione:</strong> ${escapeHTML(log.placement)}`; if (log.placement === 'Vaso' && log.potSize) repotStr += ` (${escapeHTML(log.potSize)} L)`; }
         let graftStr = ''; if (log.type === 'Innesto' && log.graftName) { graftStr = `<br>🔪 <strong>Nuovo nome pianta:</strong> ${escapeHTML(log.graftName)}`; }
         let imgStr = log.photo ? `<br><img src="${log.photo}" class="timeline-photo" alt="Foto Evento">` : '';
@@ -1129,11 +1119,13 @@ function updateChartsFromDropdown() { const plant = plantsDatabase.find(p => p.i
 function renderCharts(plant) {
     const selectedYear = document.getElementById('chart-year-filter').value; let filteredLogs = selectedYear !== 'all' ? plant.logs.filter(l => l.date.startsWith(selectedYear)) : plant.logs;
     const heightLogs = filteredLogs.filter(l => l.type === 'Misurazione'); heightLogs.sort((a,b) => new Date(a.date) - new Date(b.date));
-    if(growthChart) growthChart.destroy();
+    
+    // AGGIORNATO: Prevenzione potenziale errore Chart.js durante distruzione e ricreazione rapida
+    if(growthChart) { growthChart.destroy(); growthChart = null; }
     growthChart = new Chart(document.getElementById('growthChart').getContext('2d'), { type: 'line', data: { labels: heightLogs.map(l => l.date), datasets: [{ label: 'Altezza Pianta (cm)', data: heightLogs.map(l => l.height), borderColor: '#2e7d32', backgroundColor: 'rgba(46, 125, 50, 0.2)', borderWidth: 2, pointBackgroundColor: '#2e7d32', pointRadius: 5, fill: true, tension: 0.3 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: `📈 Curva di crescita${selectedYear !== 'all' ? ' - '+selectedYear : ''}` } }, scales: { y: { beginAtZero: true } } } });
 
     const eventLogs = filteredLogs.filter(l => l.type !== 'Misurazione'); eventLogs.sort((a,b) => new Date(a.date) - new Date(b.date));
-    if(eventsChart) eventsChart.destroy();
+    if(eventsChart) { eventsChart.destroy(); eventsChart = null; }
     const eventLabels = [...new Set(eventLogs.map(l => l.date))]; 
     const yCategories = ['Innesto', 'Rinvaso / Sistemazione', 'Misurazione pH', 'Raccolto', 'Fruttificazione', 'Fioritura', 'Stato di Salute', 'Spostamento', 'Concimazione', 'Trattamento', 'Irrigazione'];
 
