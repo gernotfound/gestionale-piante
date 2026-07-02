@@ -35,7 +35,7 @@
 <body>
 
 <!-- Popup Salvataggio Automatico -->
-<div id="autosave-toast" class="hidden">💾</div>
+<div id="autosave-toast" class="hidden">☁️ Sincronizzato</div>
 
 <div class="container">
     
@@ -196,7 +196,6 @@
                     </div>
                 </div>
 
-                <!-- CAMPO pH SPOSTATO QUI -->
                 <div>
                     <label>pH ottimale:</label>
                     <input type="number" id="p-ph" step="0.1" min="0" max="14" placeholder="es. 6.5">
@@ -228,8 +227,6 @@
                         <button class="btn btn-warning" type="button" id="btn-toggle-soil" onclick="toggleSoilMode()" style="margin: 0; padding: 5px 10px;">➕ Nuovo</button>
                     </div>
                 </div>
-
-                <!-- Il pH non è più qui -->
 
                 <div>
                     <label>Temp. minima tollerata (°C):</label>
@@ -563,6 +560,10 @@
         </div>
     </div>
 </div>
+
+<!-- Firebase SDK (Compat version per mantenere la compatibilità con il tuo codice) -->
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore-compat.js"></script>
 
 <!-- REGISTRAZIONE SERVICE WORKER (Per il funzionamento Offline) -->
 <script>
