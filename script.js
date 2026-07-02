@@ -1,3 +1,28 @@
+// --- INIZIALIZZAZIONE FIREBASE (Con i tuoi dati) ---
+const firebaseConfig = {
+    apiKey: "AIzaSyAilFym65cPPco-lyYz0J4CN_MWd90WCSE",
+    authDomain: "gestione-piante-13328.firebaseapp.com",
+    projectId: "gestione-piante-13328",
+    storageBucket: "gestione-piante-13328.firebasestorage.app",
+    messagingSenderId: "58404269335",
+    appId: "1:58404269335:web:c6c61ae31ed2057f8adb52",
+    measurementId: "G-Z534ZDP81P"
+};
+
+// Inizializza l'app Firebase
+firebase.initializeApp(firebaseConfig);
+const db = firebase.firestore();
+
+// Abilita la persistenza offline (fondamentale per la PWA in giardino)
+db.enablePersistence({ synchronizeTabs: true }).catch(function(err) {
+    if (err.code == 'failed-precondition') {
+        console.warn("Persistenza offline: più schede aperte.");
+    } else if (err.code == 'unimplemented') {
+        console.warn("Il browser non supporta la persistenza offline.");
+    }
+});
+
+// Variabili Globali
 let gardenTitle = "🌿 Gestione Piante Tropicali - Pro"; 
 let gardenNotes = ""; 
 let plantsDatabase = [];
@@ -26,58 +51,70 @@ let mainPhotoRemoved = false;
 let fruitPhotoRemoved = false; 
 
 // ==========================================
-// SISTEMA DI AUTO-SALVATAGGIO (IndexedDB)
+// SISTEMA DI AUTO-SALVATAGGIO (FIREBASE CLOUD)
 // ==========================================
-const DB_NAME = 'TropicalGardenDB';
-const STORE_NAME = 'GardenStore';
-
-function initDB() {
-    return new Promise((resolve, reject) => {
-        let request = indexedDB.open(DB_NAME, 1);
-        request.onupgradeneeded = function(e) {
-            let db = e.target.result;
-            if (!db.objectStoreNames.contains(STORE_NAME)) {
-                db.createObjectStore(STORE_NAME);
-            }
-        };
-        request.onsuccess = function(e) { resolve(e.target.result); };
-        request.onerror = function(e) { reject(e.target.error); };
-    });
-}
 
 async function saveToLocal() {
     try {
-        let db = await initDB();
-        let tx = db.transaction(STORE_NAME, 'readwrite');
-        let store = tx.objectStore(STORE_NAME);
-        const data = { title: gardenTitle, notes: gardenNotes, plants: plantsDatabase };
-        store.put(data, 'autosave_data');
+        // Salva le impostazioni generali del giardino
+        await db.collection('settings').doc('general').set({
+            title: gardenTitle,
+            notes: gardenNotes
+        });
+
+        // Salva ogni pianta come documento separato (evita i limiti di Firebase e velocizza l'app)
+        let batch = db.batch();
+        let count = 0;
+        
+        for (let plant of plantsDatabase) {
+            let docRef = db.collection('plants').doc(plant.id.toString());
+            batch.set(docRef, plant);
+            count++;
+            
+            // Firebase permette un massimo di 500 scritture simultanee, se le superi crea un nuovo blocco
+            if (count === 500) {
+                await batch.commit();
+                batch = db.batch();
+                count = 0;
+            }
+        }
+        
+        if (count > 0) {
+            await batch.commit();
+        }
+        
         showAutoSaveToast();
     } catch(e) {
-        console.error("Errore durante l'auto-salvataggio:", e);
+        console.error("Errore durante la sincronizzazione con Firebase:", e);
     }
 }
 
 async function loadFromLocal() {
     try {
-        let db = await initDB();
-        let tx = db.transaction(STORE_NAME, 'readonly');
-        let store = tx.objectStore(STORE_NAME);
-        let request = store.get('autosave_data');
-        request.onsuccess = function() {
-            let data = request.result;
-            if (data && data.plants && data.plants.length > 0) {
-                gardenTitle = data.title || "🌿 Gestione Piante Tropicali - Pro";
-                gardenNotes = data.notes || "";
-                plantsDatabase = data.plants;
-                document.getElementById('main-title').innerText = gardenTitle;
-                
-                document.getElementById('startup-screen').classList.add('hidden');
-                startAppUI();
-            }
-        };
+        const settingsDoc = await db.collection('settings').doc('general').get();
+        const snapshot = await db.collection('plants').get();
+
+        // Se il cloud è completamente vuoto, rimani sulla schermata di Benvenuto
+        if (snapshot.empty && !settingsDoc.exists) {
+            return; 
+        }
+
+        if (settingsDoc.exists) {
+            gardenTitle = settingsDoc.data().title || "🌿 Gestione Piante Tropicali - Pro";
+            gardenNotes = settingsDoc.data().notes || "";
+        }
+
+        plantsDatabase = [];
+        snapshot.forEach(doc => {
+            plantsDatabase.push(doc.data());
+        });
+
+        document.getElementById('main-title').innerText = gardenTitle;
+        document.getElementById('startup-screen').classList.add('hidden');
+        startAppUI();
+
     } catch(e) {
-        console.error("Nessun salvataggio locale trovato o errore:", e);
+        console.error("Nessun salvataggio cloud trovato o sei offline al primo avvio:", e);
     }
 }
 
@@ -90,7 +127,7 @@ function showAutoSaveToast() {
 window.addEventListener('DOMContentLoaded', loadFromLocal);
 
 window.addEventListener('beforeunload', function (e) {
-    if (unsavedChanges) { e.preventDefault(); e.returnValue = 'Hai delle modifiche non salvate in ZIP!'; }
+    if (unsavedChanges) { e.preventDefault(); e.returnValue = 'Dati in sincronizzazione col Cloud...'; }
 });
 
 // ==========================================
@@ -167,8 +204,14 @@ function startAppUI() {
 
 function createNewGarden() {
     if(plantsDatabase.length > 0) {
-        if(!confirm("⚠️ ATTENZIONE: Creando un nuovo giardino ora, perderai l'accesso a quello attuale (a meno che tu non abbia salvato il Backup ZIP). Vuoi procedere?")) return;
+        if(!confirm("⚠️ ATTENZIONE: Creando un nuovo giardino ora, distruggerai tutti i dati nel Cloud (a meno che tu non abbia salvato un Backup ZIP). Vuoi procedere?")) return;
     }
+    
+    // Pulisce fisicamente il database Cloud
+    plantsDatabase.forEach(p => {
+        db.collection('plants').doc(p.id.toString()).delete().catch(e => console.error("Errore pulizia:", e));
+    });
+
     plantsDatabase = [];
     gardenTitle = "🌿 Gestione Piante Tropicali - Pro";
     gardenNotes = "";
@@ -185,23 +228,14 @@ function startNewProfile() {
     saveToLocal(); 
 }
 
-async function logout() {
-    if(confirm("Vuoi davvero uscire dal giardino? Assicurati di aver esportato il Backup se devi spostare i dati su un altro PC.")) {
+function logout() {
+    if(confirm("Vuoi davvero uscire? (I tuoi dati sono al sicuro nel Cloud).")) {
         if(isBatchMode) toggleBatchMode(); 
         
         plantsDatabase = [];
         gardenTitle = "🌿 Gestione Piante Tropicali - Pro";
         gardenNotes = "";
         unsavedChanges = false;
-
-        try {
-            let db = await initDB();
-            let tx = db.transaction(STORE_NAME, 'readwrite');
-            let store = tx.objectStore(STORE_NAME);
-            store.delete('autosave_data');
-        } catch(e) {
-            console.error("Errore durante la cancellazione del DB:", e);
-        }
 
         document.getElementById('dashboard').classList.add('hidden');
         document.getElementById('my-data-page').classList.add('hidden');
@@ -470,7 +504,7 @@ function loadProfile(event) {
     if (!file) return;
     
     if (plantsDatabase.length > 0) {
-        if (!confirm("⚠️ ATTENZIONE: Stai per caricare un Backup. Questa operazione sovrascriverà il giardino attualmente aperto.\nHai esportato il giardino attuale prima di procedere?")) {
+        if (!confirm("⚠️ ATTENZIONE: Caricando un file ZIP ora, sovrascriverai l'intero giardino sul Cloud.\nHai esportato il giardino attuale prima di procedere?")) {
             event.target.value = ''; 
             return;
         }
@@ -548,7 +582,7 @@ async function exportData() {
         const a = document.createElement('a'); a.href = URL.createObjectURL(content);
         const now = new Date(); const dateStr = now.toISOString().slice(0, 10); 
         const timeStr = `${String(now.getHours()).padStart(2, '0')}-${String(now.getMinutes()).padStart(2, '0')}-${String(now.getSeconds()).padStart(2, '0')}`; 
-        let safeTitle = gardenTitle.replace('🌿', '').trim().replace(/[^a-zA-Z0-9 àèìòùÀÈÌÒÙ-]/g, '').replace(/\s+/g, '-');
+        let safeTitle = gardenTitle.replace('🌿', '').trim().replace(/[^a-zA-Z0-9]/g, '_');
         if (!safeTitle) safeTitle = "Giardino"; a.download = `${safeTitle}-${dateStr}-${timeStr}.zip`; a.click();
         unsavedChanges = false;
     } catch(err) { alert("Errore durante la creazione del file ZIP: " + err); } finally { btn.innerHTML = "💾 Backup"; btn.disabled = false; }
@@ -945,7 +979,6 @@ function openPlantDetail(id) {
 
     let tempStr = plant.minTemp !== undefined && plant.minTemp !== "" ? `<span style="color: #1976d2; font-weight:bold;">❄️ Minima tollerata: ${plant.minTemp}°C</span>` : '';
 
-    // AGGIORNATO: Corretta l'etichetta visiva per mostrare "pH ottimale"
     document.getElementById('detail-info').innerHTML = `
         ${parentStr}
         <p style="margin-top:0;"><strong>📅 Data semina/inizio:</strong> ${formatDateIt(plant.sowingDate)}</p>
@@ -984,7 +1017,14 @@ function toggleArchiveStatus() {
 
 function deleteCurrentPlant() {
     if(confirm("⚠️ ATTENZIONE: Questa azione la ELIMINERÀ DEFINITIVAMENTE distruggendo tutti i dati, diari e foto. (Se vuoi solo nasconderla usa il tasto 'Archivia'). Continuare?")) {
-        plantsDatabase = plantsDatabase.filter(p => p.id !== currentPlantId); unsavedChanges = true; saveToLocal(); closePlantDetail(); 
+        
+        // Elimina fisicamente la pianta dal database Cloud di Firebase
+        db.collection('plants').doc(currentPlantId.toString()).delete().catch(e => console.error("Errore eliminazione:", e));
+        
+        plantsDatabase = plantsDatabase.filter(p => p.id !== currentPlantId); 
+        unsavedChanges = true; 
+        saveToLocal(); 
+        closePlantDetail(); 
     }
 }
 
@@ -1120,7 +1160,6 @@ function renderCharts(plant) {
     const selectedYear = document.getElementById('chart-year-filter').value; let filteredLogs = selectedYear !== 'all' ? plant.logs.filter(l => l.date.startsWith(selectedYear)) : plant.logs;
     const heightLogs = filteredLogs.filter(l => l.type === 'Misurazione'); heightLogs.sort((a,b) => new Date(a.date) - new Date(b.date));
     
-    // AGGIORNATO: Prevenzione potenziale errore Chart.js durante distruzione e ricreazione rapida
     if(growthChart) { growthChart.destroy(); growthChart = null; }
     growthChart = new Chart(document.getElementById('growthChart').getContext('2d'), { type: 'line', data: { labels: heightLogs.map(l => l.date), datasets: [{ label: 'Altezza Pianta (cm)', data: heightLogs.map(l => l.height), borderColor: '#2e7d32', backgroundColor: 'rgba(46, 125, 50, 0.2)', borderWidth: 2, pointBackgroundColor: '#2e7d32', pointRadius: 5, fill: true, tension: 0.3 }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { title: { display: true, text: `📈 Curva di crescita${selectedYear !== 'all' ? ' - '+selectedYear : ''}` } }, scales: { y: { beginAtZero: true } } } });
 
